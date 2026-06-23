@@ -26,6 +26,7 @@ import static com.google.copybara.util.Glob.affectsRoots;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
+import com.google.common.base.MoreObjects.ToStringHelper;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -62,7 +63,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import javax.annotation.Nullable;
-import com.google.common.base.MoreObjects.ToStringHelper;
 
 /**
  * A class for manipulating Git repositories
@@ -175,7 +175,7 @@ public class GitOrigin implements Origin<GitRevision> {
     GitRepository repo;
     if (partialFetch) {
       String prefixedRepoUrl = String.format("%s:%s%s", configPath, workflowName, repoUrl);
-      repo = gitOptions.cachedBareRepoForUrl(prefixedRepoUrl).enablePartialFetch();
+      repo = gitOptions.cachedBareRepoForUrl(prefixedRepoUrl, repoUrl).enablePartialFetch();
     } else {
       repo = gitOptions.cachedBareRepoForUrl(repoUrl);
     }
@@ -424,7 +424,7 @@ public class GitOrigin implements Origin<GitRevision> {
         String prefixedRepoUrl = String.format("%s:%s%s", configPath, workflowName, repoUrl);
         repo =
             gitOptions
-                .cachedBareRepoForUrl(prefixedRepoUrl, gitRepositoryHook)
+                .cachedBareRepoForUrl(prefixedRepoUrl, repoUrl, gitRepositoryHook)
                 .enablePartialFetch();
       } else {
         repo = gitOptions.cachedBareRepoForUrl(repoUrl, gitRepositoryHook);

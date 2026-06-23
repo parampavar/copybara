@@ -1818,7 +1818,7 @@ public class GitRepository {
   /** Initializes the repository. */
   @CanIgnoreReturnValue
   public GitRepository init() throws RepoException {
-    return init(null);
+    return init((GitHashAlgorithm) null);
   }
 
   /** Initializes the repository with the specified object format. */
@@ -1842,6 +1842,51 @@ public class GitRepository {
     } else {
       args.add("--bare");
       git(gitDir, Optional.empty(), args.build());
+    }
+    return this;
+  }
+
+  /** Initializes the repository, matching the remote format if fetchUrl is provided. */
+  @CanIgnoreReturnValue
+  public GitRepository init(@Nullable String fetchUrl) throws RepoException {
+    try {
+      Files.createDirectories(gitDir);
+    } catch (IOException e) {
+      throw new RepoException("Failed to create cache dir", e);
+    }
+
+    GitHashAlgorithm remoteFormat = null;
+    if (fetchUrl != null) {
+      try {
+        remoteFormat = getRemoteObjectFormat(fetchUrl);
+      } catch (RepoException e) {
+        // Failed to get remote format, keep local format / use default
+        logger.atInfo().withCause(e).log("Failed to get remote object format for %s", fetchUrl);
+      }
+    }
+
+    if (isInitialized()) {
+      GitHashAlgorithm localFormat = GitHashAlgorithm.SHA1;
+      try {
+        String stdout = simpleCommand("config", "extensions.objectFormat").getStdout().trim();
+        if (stdout.contains("sha256")) {
+          localFormat = GitHashAlgorithm.SHA256;
+        }
+      } catch (RepoException e) {
+        // Unconfigured, default is sha1
+        logger.atInfo().withCause(e).log("Failed to get local object format, using SHA1");
+      }
+      if (remoteFormat != null && localFormat != remoteFormat) {
+        try {
+          FileUtil.deleteRecursively(gitDir);
+        } catch (IOException e) {
+          throw new RepoException("Failed to delete stale cache dir", e);
+        }
+      }
+    }
+
+    if (!isInitialized()) {
+      init(remoteFormat);
     }
     return this;
   }

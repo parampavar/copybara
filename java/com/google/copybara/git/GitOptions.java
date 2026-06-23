@@ -30,6 +30,7 @@ import com.google.copybara.Option;
 import com.google.copybara.exception.RepoException;
 import com.google.copybara.jcommander.GreaterThanZeroValidator;
 import com.google.copybara.jcommander.SemicolonSeparatedListSplitter;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -184,29 +185,62 @@ public class GitOptions implements Option {
   }
 
   public GitRepository cachedBareRepoForUrl(String url) throws RepoException {
-    Preconditions.checkNotNull(url);
+    return cachedBareRepoForUrl(url, /* fetchUrl= */ url);
+  }
+
+  /**
+   * Returns a newly initialized bare repository created at a cache location resolved from the cache
+   * URL, additionally validating the repository format against the remote fetch URL.
+   *
+   * @param cacheUrl the url used to resolve the local directory name in the cache
+   * @param fetchUrl the remote url used to check repository format, or null to skip check
+   * @throws RepoException if the bare repository cannot be created
+   */
+  public GitRepository cachedBareRepoForUrl(String cacheUrl, @Nullable String fetchUrl)
+      throws RepoException {
+    Preconditions.checkNotNull(cacheUrl);
     try {
-      return createBareRepo(generalOptions, resolveDirInCache(url, getRepoStorage()));
+      return createBareRepo(
+          generalOptions, resolveDirInCache(cacheUrl, getRepoStorage()), fetchUrl);
     } catch (IOException e) {
-      throw new RepoException("Cannot create a cached repo for " + url, e);
+      throw new RepoException("Cannot create a cached repo for " + cacheUrl, e);
     }
   }
 
   /**
-   * Create a newly initialized repository from the cached location.
+   * Returns a cached bare repository for the given URL, using the specified checkout hook.
    *
-   * @param url the url of the git repository being represented by {@code GitRepository}
-   * @param gitRepositoryHook describes what behavior to act out during checkouts
-   * @throws RepoException if the bare git repository cannot be created
-   * @return a newly initialized repository
+   * @param url the URL of the repository
+   * @param gitRepositoryHook the checkout hook to run when checking out from this repository
+   * @throws RepoException if the bare repository cannot be created
    */
-  public GitRepository cachedBareRepoForUrl(String url, GitRepositoryHook gitRepositoryHook)
+  public GitRepository cachedBareRepoForUrl(
+      String url, @Nullable GitRepositoryHook gitRepositoryHook) throws RepoException {
+    return cachedBareRepoForUrl(url, /* fetchUrl= */ url, gitRepositoryHook);
+  }
+
+  /**
+   * Returns a newly initialized bare repository created at a cache location resolved from the cache
+   * URL using the specified checkout hook, additionally validating the repository format against
+   * the remote fetch URL.
+   *
+   * @param cacheUrl the url used to resolve the local directory name in the cache
+   * @param fetchUrl the remote url used to check repository format, or null to skip check
+   * @param gitRepositoryHook describes what behavior to act out during checkouts
+   * @throws RepoException if the bare repository cannot be created
+   */
+  public GitRepository cachedBareRepoForUrl(
+      String cacheUrl, @Nullable String fetchUrl, @Nullable GitRepositoryHook gitRepositoryHook)
       throws RepoException {
-    Preconditions.checkNotNull(url);
+    Preconditions.checkNotNull(cacheUrl);
     try {
-      return createBareRepo(generalOptions, resolveDirInCache(url, getRepoStorage()));
+      return createBareRepo(
+          generalOptions,
+          resolveDirInCache(cacheUrl, getRepoStorage()),
+          gitRepositoryHook,
+          fetchUrl);
     } catch (IOException e) {
-      throw new RepoException("Cannot create a cached repo for " + url, e);
+      throw new RepoException("Cannot create a cached repo for " + cacheUrl, e);
     }
   }
 
@@ -229,28 +263,54 @@ public class GitOptions implements Option {
    */
   public GitRepository createBareRepo(GeneralOptions generalOptions, Path path)
       throws RepoException {
-    GitRepository repo =
-        GitRepository.newBareRepo(
-            path,
-            getGitEnvironment(generalOptions.getEnvironment()),
-            generalOptions.isVerbose(),
-            generalOptions.repoTimeout,
-            gitNoVerify,
-            getPushOptionsValidator());
-    return initRepo(repo);
+    return createBareRepo(generalOptions, path, /* fetchUrl= */ (String) null);
   }
 
   /**
-   * Create a new initialized repository in the location.
+   * Resets and returns a newly initialized bare repository created at the given path, additionally
+   * checking and configuring the repository format to match the remote fetch URL.
+   *
+   * @param generalOptions the general options to use for the {@code GitRepository}
+   * @param path the path to the git repository being represented by {@code GitRepository}
+   * @param fetchUrl the remote url used to check repository format, or null to skip check
+   * @throws RepoException if the bare repository cannot be created
+   */
+  public GitRepository createBareRepo(
+      GeneralOptions generalOptions, Path path, @Nullable String fetchUrl) throws RepoException {
+    return createBareRepo(generalOptions, path, (GitRepositoryHook) null, fetchUrl);
+  }
+
+  /**
+   * Resets and returns a newly initialized bare repository created at the given path with the
+   * specified checkout hook.
    *
    * @param generalOptions the general options to use for the {@code GitRepository}
    * @param path the path to the git repository being represented by {@code GitRepository}
    * @param gitRepositoryHook describes what behavior to act out during checkouts
-   * @throws RepoException if the bare git repository cannot be created
-   * @return a new initialized repository
+   * @throws RepoException if the bare repository cannot be created
    */
   public GitRepository createBareRepo(
-      GeneralOptions generalOptions, Path path, GitRepositoryHook gitRepositoryHook)
+      GeneralOptions generalOptions, Path path, @Nullable GitRepositoryHook gitRepositoryHook)
+      throws RepoException {
+    return createBareRepo(generalOptions, path, gitRepositoryHook, /* fetchUrl= */ null);
+  }
+
+  /**
+   * Resets and returns a newly initialized bare repository created at the given path with the
+   * specified checkout hook, additionally checking and configuring the repository format to match
+   * the remote fetch URL.
+   *
+   * @param generalOptions the general options to use for the {@code GitRepository}
+   * @param path the path to the git repository being represented by {@code GitRepository}
+   * @param gitRepositoryHook describes what behavior to act out during checkouts
+   * @param fetchUrl the remote url used to check repository format, or null to skip check
+   * @throws RepoException if the bare repository cannot be created
+   */
+  public GitRepository createBareRepo(
+      GeneralOptions generalOptions,
+      Path path,
+      @Nullable GitRepositoryHook gitRepositoryHook,
+      @Nullable String fetchUrl)
       throws RepoException {
     GitRepository repo =
         GitRepository.newBareRepo(
@@ -261,11 +321,19 @@ public class GitOptions implements Option {
             gitNoVerify,
             getPushOptionsValidator(),
             gitRepositoryHook);
-    return initRepo(repo);
+    return initRepo(repo, fetchUrl);
   }
 
+  @CanIgnoreReturnValue
   protected GitRepository initRepo(GitRepository repo) throws RepoException {
-    repo.init();
+    return initRepo(repo, /* fetchUrl= */ null);
+  }
+
+  @CanIgnoreReturnValue
+  protected GitRepository initRepo(GitRepository repo, @Nullable String fetchUrl)
+      throws RepoException {
+    repo.init(fetchUrl);
+
     if (noCredentialHelperStore) {
       return repo;
     }

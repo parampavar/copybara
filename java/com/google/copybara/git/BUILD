@@ -133,6 +133,7 @@ java_library(
         "//java/com/google/copybara/jcommander:splitters",
         "//java/com/google/copybara/jcommander:validators",
         "//java/com/google/copybara/util",
+        "//third_party:error_prone",
         "//third_party:guava",
         "//third_party:jcommander",
         "//third_party:jsr305",

@@ -26,6 +26,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.mock;
 
+import com.google.api.client.http.HttpTransport;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
@@ -50,6 +51,7 @@ import com.google.copybara.exception.EmptyChangeException;
 import com.google.copybara.exception.RepoException;
 import com.google.copybara.exception.ValidationException;
 import com.google.copybara.git.GitCredential.UserPassword;
+import com.google.copybara.git.GitRevision.GitHashAlgorithm;
 import com.google.copybara.revision.Change;
 import com.google.copybara.revision.Changes;
 import com.google.copybara.revision.Revision;
@@ -58,7 +60,9 @@ import com.google.copybara.testing.RecordsProcessCallDestination;
 import com.google.copybara.testing.RecordsProcessCallDestination.ProcessedChange;
 import com.google.copybara.testing.SkylarkTestExecutor;
 import com.google.copybara.testing.TransformWorks;
+import com.google.copybara.testing.git.GitApiMockHttpTransport;
 import com.google.copybara.testing.git.GitTestUtil;
+import com.google.copybara.util.FileUtil;
 import com.google.copybara.util.Glob;
 import com.google.copybara.util.console.Message;
 import com.google.copybara.util.console.Message.MessageType;
@@ -151,7 +155,8 @@ public class GitOriginTest {
             url = '%s',
             ref = '%s',
             %s
-        )"""
+        )\
+        """
             .formatted(url, ref, moreOriginArgs));
   }
 
@@ -180,6 +185,145 @@ public class GitOriginTest {
                 + "primaryBranchMigrationMode=false, "
                 + "repoId=123456789"
                 + "}");
+  }
+
+  @Test
+  public void cachedBareRepoForUrl_mismatchHashAlgorithm_reinitializesCache() throws Exception {
+    // Set up remote repo to use sha256.
+    Path remoteSha256 = Files.createTempDirectory("remoteSha256");
+    GitRepository repoSha256 =
+        GitRepository.newRepo(
+                /* verbose= */ true,
+                remoteSha256,
+                new GitEnvironment(options.general.getEnvironment()))
+            .init(GitHashAlgorithm.SHA256);
+    writeFile(remoteSha256, "test.txt", "some content");
+    repoSha256.add().files("test.txt").run();
+    repoSha256.simpleCommand("commit", "-m", "first file", "--date", COMMIT_TIME);
+    String branch = repoSha256.simpleCommand("symbolic-ref", "--short", "HEAD").getStdout().trim();
+
+    // Simulate existing local cache for this URL was initialized as sha1.
+    String urlSha256 = "file://" + remoteSha256.toFile().getAbsolutePath();
+    GitRepository cachedRepo = options.git.cachedBareRepoForUrl(urlSha256);
+    FileUtil.deleteRecursively(cachedRepo.getGitDir());
+    cachedRepo.init(GitHashAlgorithm.SHA1);
+
+    // origin.resolve() should trigger cache validation and wipe/re-init as sha256
+    origin =
+        skylark.eval(
+            "result",
+            String.format(
+                """
+                result = git.origin(
+                    url = '%s',
+                    ref = '%s',
+                )\
+                """,
+                urlSha256, branch));
+    origin.resolve(branch);
+
+    GitRepository updatedCachedRepo = options.git.cachedBareRepoForUrl(urlSha256);
+    assertThat(
+            updatedCachedRepo.simpleCommand("config", "extensions.objectFormat").getStdout().trim())
+        .isEqualTo("sha256");
+  }
+
+  @Test
+  public void cachedBareRepoForUrl_mismatchHashAlgorithm_reinitializesCache_sha256ToSha1()
+      throws Exception {
+    // Set up remote repo to use sha1.
+    Path remoteSha1 = Files.createTempDirectory("remoteSha1");
+    GitRepository repoSha1 =
+        GitRepository.newRepo(
+                /* verbose= */ true,
+                remoteSha1,
+                new GitEnvironment(options.general.getEnvironment()))
+            .init(GitHashAlgorithm.SHA1);
+    writeFile(remoteSha1, "test.txt", "some content");
+    repoSha1.add().files("test.txt").run();
+    repoSha1.simpleCommand("commit", "-m", "first file", "--date", COMMIT_TIME);
+    String branch = repoSha1.simpleCommand("symbolic-ref", "--short", "HEAD").getStdout().trim();
+
+    // Simulate existing local cache for this URL was initialized as sha256.
+    String urlSha1 = "file://" + remoteSha1.toFile().getAbsolutePath();
+    GitRepository cachedRepo = options.git.cachedBareRepoForUrl(urlSha1);
+    FileUtil.deleteRecursively(cachedRepo.getGitDir());
+    cachedRepo.init(GitHashAlgorithm.SHA256);
+
+    // origin.resolve() should trigger cache validation and wipe/re-init as sha1
+    origin =
+        skylark.eval(
+            "result",
+            String.format(
+                """
+                result = git.origin(
+                    url = '%s',
+                    ref = '%s',
+                )\
+                """,
+                urlSha1, branch));
+    origin.resolve(branch);
+
+    GitRepository updatedCachedRepo = options.git.cachedBareRepoForUrl(urlSha1);
+    // Config should not have objectFormat set (defaults to sha1)
+    assertThrows(
+        RepoException.class,
+        () -> updatedCachedRepo.simpleCommand("config", "extensions.objectFormat"));
+  }
+
+  @Test
+  public void cachedBareRepoForUrl_nullFetchUrl_keepsExistingCache() throws Exception {
+    Path remote = Files.createTempDirectory("remote");
+    GitRepository repo =
+        GitRepository.newRepo(
+                /* verbose= */ true, remote, new GitEnvironment(options.general.getEnvironment()))
+            .init(GitHashAlgorithm.SHA1);
+    writeFile(remote, "test.txt", "some content");
+    repo.add().files("test.txt").run();
+    repo.simpleCommand("commit", "-m", "first file", "--date", COMMIT_TIME);
+
+    // Simulate existing local cache for this URL was initialized as sha256.
+    String url = "file://" + remote.toFile().getAbsolutePath();
+    GitRepository cachedRepo = options.git.cachedBareRepoForUrl(url, /* fetchUrl= */ (String) null);
+    FileUtil.deleteRecursively(cachedRepo.getGitDir());
+    cachedRepo.init(GitHashAlgorithm.SHA256);
+
+    // Resolving cachedBareRepoForUrl using null fetchUrl
+    GitRepository updatedCachedRepo =
+        options.git.cachedBareRepoForUrl(url, /* fetchUrl= */ (String) null);
+    // Cache format should still be sha256 (not wiped or re-initialized because fetchUrl is null)
+    assertThat(
+            updatedCachedRepo.simpleCommand("config", "extensions.objectFormat").getStdout().trim())
+        .isEqualTo("sha256");
+  }
+
+  @Test
+  public void cachedBareRepoForUrl_remoteFormatResolvingFails_keepsExistingCache()
+      throws Exception {
+    Path remote = Files.createTempDirectory("remote");
+    GitRepository repo =
+        GitRepository.newRepo(
+                /* verbose= */ true, remote, new GitEnvironment(options.general.getEnvironment()))
+            .init(GitHashAlgorithm.SHA1);
+    writeFile(remote, "test.txt", "some content");
+    repo.add().files("test.txt").run();
+    repo.simpleCommand("commit", "-m", "first file", "--date", COMMIT_TIME);
+
+    // Simulate existing local cache for this URL was initialized as sha256.
+    String url = "file://" + remote.toFile().getAbsolutePath();
+    GitRepository cachedRepo = options.git.cachedBareRepoForUrl(url);
+    FileUtil.deleteRecursively(cachedRepo.getGitDir());
+    cachedRepo.init(GitHashAlgorithm.SHA256);
+
+    // Resolving using an invalid fetchUrl that throws RepoException
+    GitRepository updatedCachedRepo =
+        options.git.cachedBareRepoForUrl(
+            url, /* fetchUrl= */ "file:///invalid/path/does/not/exist");
+    // Cache format should still be sha256 (not wiped or re-initialized because query remote format
+    // failed)
+    assertThat(
+            updatedCachedRepo.simpleCommand("config", "extensions.objectFormat").getStdout().trim())
+        .isEqualTo("sha256");
   }
 
   @Test
@@ -639,18 +783,42 @@ public class GitOriginTest {
 
   @Test
   public void testCheckout_withCheckoutFailure() throws Exception {
+    options.github =
+        new GitHubOptions(options.general, options.git) {
+          @Override
+          protected HttpTransport newHttpTransport() {
+            return new GitApiMockHttpTransport() {
+              @Override
+              public String getContent(
+                  String method,
+                  String url,
+                  com.google.api.client.testing.http.MockLowLevelHttpRequest request) {
+                if (url.startsWith("https://api.github.com/repos/google/copybara")) {
+                  return "{\"id\": 987654321}";
+                }
+                return "";
+              }
+            };
+          }
+        };
+
     GitOrigin o =
         skylark.eval(
             "result",
             """
             result = git.origin(
-            url = 'https://github.com/google/copybara',
-            ref = 'main',
-            repo_id = '123456789'
+                url = 'https://github.com/google/copybara',
+                ref = 'main',
+                repo_id = '123456789'
             )
             """);
     Reader<GitRevision> reader = o.newReader(originFiles, authoring);
-    reader.checkout(o.resolve(defaultBranch), checkoutDir);
+    GitRevision revision = o.resolve(defaultBranch);
+    ValidationException thrown =
+        assertThrows(ValidationException.class, () -> reader.checkout(revision, checkoutDir));
+    assertThat(thrown)
+        .hasMessageThat()
+        .contains("Expected repository id 123456789 but got repo id 987654321");
   }
 
   @Test
@@ -2036,6 +2204,7 @@ public class GitOriginTest {
 
     assertThat(actual.get("partialFetch")).containsExactly("true");
     assertThat(actual.get("url")).containsExactly("https://my-server.org/copybara");
+    assertThat(origin.getRepository()).isNotNull();
   }
 
   @Test
@@ -2118,6 +2287,38 @@ public class GitOriginTest {
     GitRepository repository = origin.getRepository();
     UserPassword result = repository
         .credentialFill("https://my-server.org/copybara");
+    assertThat(result.getUsername()).isEqualTo("test@example.com");
+    assertThat(result.getPassword_BeCareful()).isEqualTo("top_secret");
+  }
+
+  @Test
+  public void getRepository_partialFetch() throws Exception {
+    options.git.useConfigCredentials = true;
+    skylark.addConfigFile(
+        "devtools/copybara/policy/github.origin.allowlist.textproto", "thisIsNotRead");
+    origin =
+        skylark.eval(
+            "result",
+            """
+            result = git.github_origin(
+                url = 'https://github.com/google/copybara',
+                ref = 'main',
+                partial_fetch = True,
+                enable_lfs = True,
+                credentials = credentials.username_password(
+                  credentials.static_value('test@example.com'),
+                  credentials.static_secret('password', 'top_secret'))
+                )\
+            """);
+
+    GitRepository repository = origin.getRepository();
+
+    assertThat(repository).isNotNull();
+    assertThat(repository.simpleCommand("config", "extensions.partialClone").getStdout().trim())
+        .isEqualTo("origin");
+    assertThat(repository.simpleCommand("config", "remote.origin.url").getStdout().trim())
+        .isEqualTo("https://github.com/google/copybara");
+    UserPassword result = repository.credentialFill("https://github.com/google/copybara");
     assertThat(result.getUsername()).isEqualTo("test@example.com");
     assertThat(result.getPassword_BeCareful()).isEqualTo("top_secret");
   }

@@ -49,6 +49,8 @@ import com.google.copybara.git.GitHubOptions;
 import com.google.copybara.git.GitOptions;
 import com.google.copybara.git.GitRepository;
 import com.google.copybara.git.GitRepository.PushCmd;
+import com.google.copybara.git.GitRepositoryHook;
+import com.google.copybara.git.GitRevision.GitHashAlgorithm;
 import com.google.copybara.git.InvalidRefspecException;
 import com.google.copybara.git.Refspec;
 import com.google.copybara.testing.OptionsBuilder;
@@ -406,11 +408,25 @@ public class GitTestUtil {
       return repo;
     }
 
+
     @Override
-    public GitRepository createBareRepo(GeneralOptions generalOptions, Path path)
+    public GitRepository createBareRepo(
+        GeneralOptions generalOptions,
+        Path path,
+        @Nullable GitRepositoryHook gitRepositoryHook,
+        @Nullable String fetchUrl)
         throws RepoException {
-      return initRepo(new RewriteUrlGitRepository(path, null, generalOptions, httpsRepos,
-                                                  validator, mappingPrefixes, forcePushForRefspec));
+      return initRepo(
+          new RewriteUrlGitRepository(
+              path,
+              null,
+              generalOptions,
+              httpsRepos,
+              validator,
+              mappingPrefixes,
+              forcePushForRefspec,
+              gitRepositoryHook),
+          fetchUrl);
     }
 
     /** Add additional prefixes that should be mapped for test. */
@@ -444,6 +460,26 @@ public class GitTestUtil {
         Validator validator,
         Set<String> mappingPrefixes,
         @Nullable String forcePushForRefspec) {
+      this(
+          gitDir,
+          workTree,
+          generalOptions,
+          httpsRepos,
+          validator,
+          mappingPrefixes,
+          forcePushForRefspec,
+          null);
+    }
+
+    public RewriteUrlGitRepository(
+        Path gitDir,
+        Path workTree,
+        GeneralOptions generalOptions,
+        Path httpsRepos,
+        Validator validator,
+        Set<String> mappingPrefixes,
+        @Nullable String forcePushForRefspec,
+        @Nullable GitRepositoryHook gitRepositoryHook) {
       super(
           gitDir,
           workTree,
@@ -452,7 +488,7 @@ public class GitTestUtil {
           generalOptions.repoTimeout,
           false,
           new GitRepository.PushOptionsValidator(Optional.empty()),
-          /* gitRepositoryHook= */ null);
+          gitRepositoryHook);
       this.generalOptions = generalOptions;
       this.httpsRepos = httpsRepos;
       this.validator = validator;
@@ -493,6 +529,11 @@ public class GitTestUtil {
     }
 
     @Override
+    public GitHashAlgorithm getRemoteObjectFormat(String fetchUrl) throws RepoException {
+      return super.getRemoteObjectFormat(mapUrl(fetchUrl));
+    }
+
+    @Override
     public Map<String, String> lsRemote(
         String url, Collection<String> refs, int maxLogLines, Collection<String> flags)
         throws RepoException, ValidationException {
@@ -514,17 +555,24 @@ public class GitTestUtil {
 
     @Override
     public GitRepository withWorkTree(Path newWorkTree) {
-      return new RewriteUrlGitRepository(getGitDir(), newWorkTree, generalOptions, httpsRepos,
-          validator, mappingPrefixes, forcePushForRefspec);
+      return new RewriteUrlGitRepository(
+          getGitDir(),
+          newWorkTree,
+          generalOptions,
+          httpsRepos,
+          validator,
+          mappingPrefixes,
+          forcePushForRefspec,
+          gitRepositoryHook);
     }
 
-    private String mapUrl(String url) {
+    private String mapUrl(String url) throws RepoException {
       for (String prefix : mappingPrefixes) {
         if (url.startsWith(prefix)) {
           Path repo = httpsRepos.resolve(url.replace(prefix, ""));
-          assertWithMessage("Url %s is not mocked for %s", url, repo)
-              .that(Files.isDirectory(repo))
-              .isTrue();
+          if (!Files.isDirectory(repo)) {
+            throw new RepoException(String.format("Url %s is not mocked for %s", url, repo));
+          }
           return "file:///" + repo;
         }
       }

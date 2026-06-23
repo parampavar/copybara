@@ -2002,6 +2002,56 @@ public class GitRepositoryTest {
     assertThat(newRepo.isInitialized()).isTrue();
   }
 
+  @Test
+  public void init_withFetchUrl_resolvesFormatAndInitializes() throws Exception {
+    Path remoteGitDir = Files.createTempDirectory("remote-git");
+    GitRepository remoteRepo =
+        GitRepository.newBareRepo(
+            remoteGitDir, getGitEnv(), /* verbose= */ true, DEFAULT_TIMEOUT, /* noVerify= */ false);
+    Path localGitDir = Files.createTempDirectory("local-git");
+    GitRepository localRepo =
+        GitRepository.newBareRepo(
+            localGitDir, getGitEnv(), /* verbose= */ true, DEFAULT_TIMEOUT, /* noVerify= */ false);
+
+    remoteRepo.init(GitHashAlgorithm.SHA256);
+    localRepo.init("file://" + remoteGitDir.toAbsolutePath());
+    String localFormat =
+        localRepo.simpleCommand("config", "extensions.objectformat").getStdout().trim();
+
+    assertThat(localRepo.isInitialized()).isTrue();
+    assertThat(localFormat).isEqualTo("sha256");
+  }
+
+  @Test
+  public void init_withMismatchingFormat_wipesAndReinitializes() throws Exception {
+    Path remoteGitDir = Files.createTempDirectory("remote-git");
+    GitRepository remoteRepo =
+        GitRepository.newBareRepo(
+            remoteGitDir, getGitEnv(), /* verbose= */ true, DEFAULT_TIMEOUT, /* noVerify= */ false);
+    Path localGitDir = Files.createTempDirectory("local-git");
+    GitRepository localRepo =
+        GitRepository.newBareRepo(
+            localGitDir, getGitEnv(), /* verbose= */ true, DEFAULT_TIMEOUT, /* noVerify= */ false);
+
+    remoteRepo.init(GitHashAlgorithm.SHA256);
+    localRepo.init((GitHashAlgorithm) null);
+
+    String localFormatBefore = "";
+    try {
+      localFormatBefore =
+          localRepo.simpleCommand("config", "extensions.objectformat").getStdout().trim();
+    } catch (RepoException e) {
+      // extensions.objectformat might not be configured if its default is sha1
+    }
+    assertThat(localFormatBefore).isNotEqualTo("sha256");
+
+    localRepo.init("file://" + remoteGitDir.toAbsolutePath());
+    String localFormatAfter =
+        localRepo.simpleCommand("config", "extensions.objectformat").getStdout().trim();
+
+    assertThat(localFormatAfter).isEqualTo("sha256");
+  }
+
   private GitRepository mockRepository(Path gitDir, Path workTree) throws RepoException {
     GitRepository repository = GitRepository.newBareRepo(gitDir,
         getGitEnv(), /*verbose=*/true, DEFAULT_TIMEOUT, /*noVerify=*/ false)
