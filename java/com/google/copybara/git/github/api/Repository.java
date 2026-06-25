@@ -16,13 +16,16 @@
 package com.google.copybara.git.github.api;
 
 import com.google.api.client.util.Key;
+import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
+import net.starlark.java.eval.StarlarkValue;
 
 /**
  * This class is only used to represent a GitHub Repository object returned by the GitHub REST API,
  * see https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#get-a-repository
  */
-public class Repository {
+@StarlarkBuiltin(name = "Repository", documented = false)
+public class Repository implements StarlarkValue {
   @Key("default_branch")
   private String defaultBranch;
 

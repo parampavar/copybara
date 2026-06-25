@@ -18,10 +18,12 @@ package com.google.copybara.git.gerritapi;
 
 import com.google.api.client.util.Key;
 import com.google.common.base.MoreObjects;
+import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.StarlarkValue;
 
 /** Result of evaluating a submit requirement on a change. */
+@StarlarkBuiltin(name = "SubmitRequirementResultInfo", documented = false)
 public class SubmitRequirementResultInfo implements StarlarkValue {
 
   @Key private String name;

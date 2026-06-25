@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
+import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
@@ -41,11 +42,10 @@ import net.starlark.java.eval.NoneType;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.StarlarkValue;
 
-/**
- * A StarlarkContext for running Actions.
- */
-public abstract class ActionContext<T extends SkylarkContext<T>> implements SkylarkContext<T>,
-    StarlarkValue {
+/** A StarlarkContext for running Actions. */
+@StarlarkBuiltin(name = "ActionContext", documented = false)
+public abstract class ActionContext<T extends SkylarkContext<T>>
+    implements SkylarkContext<T>, StarlarkValue {
 
   protected final List<DestinationEffect> newDestinationEffects = new ArrayList<>();
   protected final Action action;
@@ -137,44 +137,44 @@ public abstract class ActionContext<T extends SkylarkContext<T>> implements Skyl
       name = "record_effect",
       doc = "Records an effect of the current action.",
       parameters = {
-          @Param(name = "summary", doc = "The summary of this effect", named = true),
-          @Param(
-              name = "origin_refs",
-              allowedTypes = {
-                  @ParamType(type = Sequence.class, generic1 = OriginRef.class),
-              },
-              doc = "The origin refs",
-              named = true),
-          @Param(name = "destination_ref", doc = "The destination ref", named = true),
-          @Param(
-              name = "errors",
-              allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
-              defaultValue = "[]",
-              doc = "An optional list of errors",
-              named = true),
-          @Param(
-              name = "type",
-              doc =
-                  "The type of migration effect:<br>"
-                      + "<ul>"
-                      + "<li><b>'CREATED'</b>: A new review or change was created.</li>"
-                      + "<li><b>'UPDATED'</b>: An existing review or change was updated.</li>"
-                      + "<li><b>'NOOP'</b>: The change was a noop.</li>"
-                      + "<li><b>'NOOP_AGAINST_PENDING_CHANGE'</b>: The change was a noop, relative"
-                      + "to an existing pending change.</li>"
-                      + "<li><b>'INSUFFICIENT_APPROVALS'</b>: The effect couldn't happen because "
-                      + "the change doesn't have enough approvals.</li>"
-                      + "<li><b>'ERROR'</b>: A user attributable error happened that prevented "
-                      + "the destination from creating/updating the change. "
-                      + "<li><b>'STARTED'</b>: The initial effect of a migration that depends on a "
-                      + "previous one. This allows to have 'dependant' migrations defined by users.\n"
-                      + "An example of this: a workflow migrates code from a Gerrit review to a "
-                      + "GitHub PR, and a feedback migration migrates the test results from a CI in "
-                      + "GitHub back to the Gerrit change.\n"
-                      + "This effect would be created on the former one.</li>"
-                      + "</ul>",
-              defaultValue = "\"UPDATED\"",
-              named = true)
+        @Param(name = "summary", doc = "The summary of this effect", named = true),
+        @Param(
+            name = "origin_refs",
+            allowedTypes = {
+              @ParamType(type = Sequence.class, generic1 = OriginRef.class),
+            },
+            doc = "The origin refs",
+            named = true),
+        @Param(name = "destination_ref", doc = "The destination ref", named = true),
+        @Param(
+            name = "errors",
+            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            defaultValue = "[]",
+            doc = "An optional list of errors",
+            named = true),
+        @Param(
+            name = "type",
+            doc =
+                "The type of migration effect:<br>"
+                    + "<ul>"
+                    + "<li><b>'CREATED'</b>: A new review or change was created.</li>"
+                    + "<li><b>'UPDATED'</b>: An existing review or change was updated.</li>"
+                    + "<li><b>'NOOP'</b>: The change was a noop.</li>"
+                    + "<li><b>'NOOP_AGAINST_PENDING_CHANGE'</b>: The change was a noop, relative "
+                    + "to an existing pending change.</li>"
+                    + "<li><b>'INSUFFICIENT_APPROVALS'</b>: The effect couldn't happen because "
+                    + "the change doesn't have enough approvals.</li>"
+                    + "<li><b>'ERROR'</b>: A user attributable error happened that prevented "
+                    + "the destination from creating/updating the change. "
+                    + "<li><b>'STARTED'</b>: The initial effect of a migration that depends on a "
+                    + "previous one. This allows to have 'dependant' migrations defined by users.\n"
+                    + "An example of this: a workflow migrates code from a Gerrit review to a "
+                    + "GitHub PR, and a feedback migration migrates the test results from a CI in "
+                    + "GitHub back to the Gerrit change.\n"
+                    + "This effect would be created on the former one.</li>"
+                    + "</ul>",
+            defaultValue = "\"UPDATED\"",
+            named = true)
       })
   public void recordEffect(
       String summary,

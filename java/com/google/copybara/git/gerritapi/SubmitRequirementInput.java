@@ -17,6 +17,7 @@
 package com.google.copybara.git.gerritapi;
 
 import com.google.api.client.util.Key;
+import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.StarlarkValue;
 
@@ -25,6 +26,7 @@ import net.starlark.java.eval.StarlarkValue;
  *
  * <p>https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#submit-requirement-input
  */
+@StarlarkBuiltin(name = "SubmitRequirementInput", documented = false)
 public class SubmitRequirementInput implements StarlarkValue {
   /** Submit requirement name. */
   @Key private String name;

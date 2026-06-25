@@ -19,6 +19,7 @@ package com.google.copybara.go;
 import com.google.api.client.util.Key;
 import com.google.common.base.MoreObjects;
 import javax.annotation.Nullable;
+import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.StarlarkValue;
 
@@ -26,6 +27,7 @@ import net.starlark.java.eval.StarlarkValue;
  * A data class that can be used to a json string into an object for response from
  * https://go.dev/ref/mod#goproxy-protocol
  */
+@StarlarkBuiltin(name = "GoVersionObject", documented = false)
 public class GoVersionObject implements StarlarkValue {
   @Key("Version")
   private String version;
@@ -64,6 +66,7 @@ public class GoVersionObject implements StarlarkValue {
   }
 
   /** A data class that represents the optional Origin field in GoVersionObject. */
+  @StarlarkBuiltin(name = "Origin", documented = false)
   public static class Origin implements StarlarkValue {
     @Key("VCS")
     private String vcs;

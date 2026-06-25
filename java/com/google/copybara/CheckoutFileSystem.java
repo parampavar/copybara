@@ -29,15 +29,15 @@ import java.nio.file.PathMatcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.starlark.java.annot.Param;
+import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkList;
 import net.starlark.java.eval.StarlarkValue;
 
-/**
- * Common Starlark methods that allow users to manipulate paths of the workdir/checkoutPath.
- */
+/** Common Starlark methods that allow users to manipulate paths of the workdir/checkoutPath. */
+@StarlarkBuiltin(name = "CheckoutFileSystem", documented = false)
 @SuppressWarnings("unused")
 public class CheckoutFileSystem implements StarlarkValue {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();

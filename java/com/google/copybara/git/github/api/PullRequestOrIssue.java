@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableList;
 import java.time.ZonedDateTime;
 import java.util.List;
 import javax.annotation.Nullable;
+import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkValue;
@@ -32,6 +33,7 @@ import net.starlark.java.eval.StarlarkValue;
  *
  * <p>There are more fields but they are ignored for now.
  */
+@StarlarkBuiltin(name = "PullRequestOrIssue", documented = false)
 public class PullRequestOrIssue implements StarlarkValue {
   @Key private long number;
   @Key private String state;

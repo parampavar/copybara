@@ -24,6 +24,7 @@ import com.google.copybara.util.Glob;
 import java.util.List;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
+import net.starlark.java.annot.StarlarkLibrary;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Sequence;
@@ -36,6 +37,7 @@ import net.starlark.java.eval.StarlarkValue;
  * <p>Don't add functions here and prefer "core" namespace unless it is something really general
  */
 @Library
+@StarlarkLibrary
 public class CoreGlobal implements StarlarkValue {
 
   @SuppressWarnings("unused")

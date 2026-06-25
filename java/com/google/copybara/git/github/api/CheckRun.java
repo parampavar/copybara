@@ -249,6 +249,7 @@ public class CheckRun implements StarlarkValue {
   }
 
   /** PR submessage in check_run. */
+  @StarlarkBuiltin(name = "PullRequest", documented = false)
   public static class PullRequest implements StarlarkValue {
     @Key int number;
 
