@@ -3757,7 +3757,7 @@ Name | Type | Description
 
 Integrate changes from a url present in the migrated change label.
 
-<code>git_integrate</code> <code>git.integrate(<a href=#git.integrate.label>label</a>="COPYBARA_INTEGRATE_REVIEW", <a href=#git.integrate.strategy>strategy</a>="FAKE_MERGE_AND_INCLUDE_FILES", <a href=#git.integrate.ignore_errors>ignore_errors</a>=True)</code>
+<code>git_integrate</code> <code>git.integrate(<a href=#git.integrate.label>label</a>="COPYBARA_INTEGRATE_REVIEW", <a href=#git.integrate.strategy>strategy</a>="FAKE_MERGE_AND_INCLUDE_FILES", <a href=#git.integrate.ignore_errors>ignore_errors</a>=True, <a href=#git.integrate.allow_unrelated_history>allow_unrelated_history</a>=False)</code>
 
 
 <h4 id="parameters.git.integrate">Parameters:</h4>
@@ -3767,6 +3767,7 @@ Parameter | Description
 <span id=git.integrate.label href=#git.integrate.label>label</span> | <code><a href="#string">string</a></code><br><p>The migration label that will contain the url to the change to integrate.</p>
 <span id=git.integrate.strategy href=#git.integrate.strategy>strategy</span> | <code><a href="#string">string</a></code><br><p>How to integrate the change:<br><ul> <li><b>'FAKE_MERGE'</b>: Add the url revision/reference as parent of the migration change but ignore all the files from the url. The commit message will be a standard merge one but will include the corresponding RevId label</li> <li><b>'FAKE_MERGE_AND_INCLUDE_FILES'</b>: Same as 'FAKE_MERGE' but any change to files that doesn't match destination_files will be included as part of the merge commit. So it will be a semi fake merge: Fake for destination_files but merge for non destination files.</li> <li><b>'INCLUDE_FILES'</b>: Same as 'FAKE_MERGE_AND_INCLUDE_FILES' but it it doesn't create a merge but only include changes not matching destination_files</li></ul></p>
 <span id=git.integrate.ignore_errors href=#git.integrate.ignore_errors>ignore_errors</span> | <code><a href="#bool">bool</a></code><br><p>If we should ignore integrate errors and continue the migration without the integrate</p>
+<span id=git.integrate.allow_unrelated_history href=#git.integrate.allow_unrelated_history>allow_unrelated_history</span> | <code><a href="#bool">bool</a></code><br><p>If true allow integrates of unrelated histories.</p>
 
 
 <h4 id="example.git.integrate">Example:</h4>

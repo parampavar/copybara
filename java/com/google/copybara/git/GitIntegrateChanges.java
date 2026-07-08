@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Google Inc.
+ * Copyright (C) 2016 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,11 +59,18 @@ public class GitIntegrateChanges implements StarlarkValue {
   private final String label;
   private final Strategy strategy;
   private final boolean ignoreErrors;
+  private final boolean allowUnrelatedHistory;
 
   GitIntegrateChanges(String label, Strategy strategy, boolean ignoreErrors) {
+    this(label, strategy, ignoreErrors, /* allowUnrelatedHistory= */ false);
+  }
+
+  GitIntegrateChanges(
+      String label, Strategy strategy, boolean ignoreErrors, boolean allowUnrelatedHistory) {
     this.label = Preconditions.checkNotNull(label);
     this.strategy = Preconditions.checkNotNull(strategy);
     this.ignoreErrors = ignoreErrors;
+    this.allowUnrelatedHistory = allowUnrelatedHistory;
   }
 
   /**
@@ -154,7 +161,8 @@ public class GitIntegrateChanges implements StarlarkValue {
             generalOptions.console(),
             generalOptions.getDirFactory(),
             generalOptions.isTemporaryFeature(
-                "GIT_INTEGRATE_FAIL_IF_COMMON_BASELINE_NOT_FOUND", true));
+                "GIT_INTEGRATE_FAIL_IF_COMMON_BASELINE_NOT_FOUND", true),
+            allowUnrelatedHistory);
         optionalIntegrateLabel = Optional.of(integrateLabel);
       } catch (ValidationException e) {
         throw new CannotIntegrateException("Error resolving " + label.getValue(), e);
@@ -180,13 +188,15 @@ public class GitIntegrateChanges implements StarlarkValue {
           MessageInfo messageInfo,
           Console console,
           DirFactory dirFactory,
-          boolean failIfIntegrateCommitNotFound)
+          boolean failIfIntegrateCommitNotFound,
+          boolean allowUnrelatedHistory)
           throws ValidationException, RepoException {
         GitLogEntry head = getHeadCommit(repository);
 
-        if (!findCommonBaseline(
-                repository, integrateLabel, head, failIfIntegrateCommitNotFound, console)
-            .isPresent()) {
+        if (!allowUnrelatedHistory
+            && findCommonBaseline(
+                    repository, integrateLabel, head, failIfIntegrateCommitNotFound, console)
+                .isEmpty()) {
           console.warnFmt("Skipping creation of merge for '%s' as Copybara cannot find a common"
               + " parent. This normally means that the integrate label reference is for an"
               + " unrelated repository", integrateLabel);
@@ -219,7 +229,8 @@ public class GitIntegrateChanges implements StarlarkValue {
           MessageInfo messageInfo,
           Console console,
           DirFactory dirFactory,
-          boolean failIfIntegrateCommitNotFound)
+          boolean failIfIntegrateCommitNotFound,
+          boolean allowUnrelatedHistory)
           throws ValidationException, RepoException {
         // Fake merge first so that we have a commit and then amend that commit wit the external
         // files
@@ -231,7 +242,8 @@ public class GitIntegrateChanges implements StarlarkValue {
             messageInfo,
             console,
             dirFactory,
-            failIfIntegrateCommitNotFound);
+            failIfIntegrateCommitNotFound,
+            allowUnrelatedHistory);
         INCLUDE_FILES.integrate(
             repository,
             gitRevision,
@@ -240,7 +252,8 @@ public class GitIntegrateChanges implements StarlarkValue {
             messageInfo,
             console,
             dirFactory,
-            failIfIntegrateCommitNotFound);
+            failIfIntegrateCommitNotFound,
+            allowUnrelatedHistory);
       }
     },
     /**
@@ -256,7 +269,8 @@ public class GitIntegrateChanges implements StarlarkValue {
           MessageInfo messageInfo,
           Console console,
           DirFactory dirFactory,
-          boolean failIfIntegrateCommitNotFound)
+          boolean failIfIntegrateCommitNotFound,
+          boolean allowUnrelatedHistory)
           throws ValidationException, RepoException {
         // Save HEAD commit before starting messing with the repo
         GitLogEntry head = getHeadCommit(repository);
@@ -427,7 +441,8 @@ public class GitIntegrateChanges implements StarlarkValue {
         MessageInfo messageInfo,
         Console console,
         DirFactory dirFactory,
-        boolean failIfIntegrateCommitNotFound)
+        boolean failIfIntegrateCommitNotFound,
+        boolean allowUnrelatedHistory)
         throws ValidationException, RepoException {
       throw new CannotIntegrateException(this + " integrate mode is still not supported");
     }
@@ -442,9 +457,10 @@ public class GitIntegrateChanges implements StarlarkValue {
       return false;
     }
     GitIntegrateChanges that = (GitIntegrateChanges) o;
-    return ignoreErrors == that.ignoreErrors &&
-        Objects.equals(label, that.label) &&
-        strategy == that.strategy;
+    return ignoreErrors == that.ignoreErrors
+        && allowUnrelatedHistory == that.allowUnrelatedHistory
+        && Objects.equals(label, that.label)
+        && strategy == that.strategy;
   }
 
   public Strategy getStrategy() {
@@ -455,9 +471,13 @@ public class GitIntegrateChanges implements StarlarkValue {
     return label;
   }
 
+  public boolean isAllowUnrelatedHistory() {
+    return allowUnrelatedHistory;
+  }
+
   @Override
   public int hashCode() {
-    return Objects.hash(label, strategy, ignoreErrors);
+    return Objects.hash(label, strategy, ignoreErrors, allowUnrelatedHistory);
   }
 
   @Override
@@ -466,6 +486,7 @@ public class GitIntegrateChanges implements StarlarkValue {
         .add("label", label)
         .add("strategy", strategy)
         .add("ignoreErrors", ignoreErrors)
+        .add("allowUnrelatedHistory", allowUnrelatedHistory)
         .toString();
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Google Inc.
+ * Copyright (C) 2016 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -350,16 +350,117 @@ public class GitDestinationIntegrateTest {
   }
 
   private GitDestination destination(Strategy strategy) throws ValidationException {
+    return destination(strategy, /* allowUnrelatedHistory= */ false);
+  }
+
+  private GitDestination destination(Strategy strategy, boolean allowUnrelatedHistory)
+      throws ValidationException {
     return destination(
         "url = '" + url + "'",
         String.format("push='%s'", primaryBranch),
         """
         integrates = [git.integrate(
                  ignore_errors = False,
+                 allow_unrelated_history = %s,
                  strategy = '%s',
             ),]\
         """
-            .formatted(strategy));
+            .formatted(allowUnrelatedHistory ? "True" : "False", strategy));
+  }
+
+  private GitDestination destination(String... args) throws ValidationException {
+    return skylark.eval(
+        "r",
+        String.format(
+            """
+            r = git.destination(
+                %s
+            )\
+            """,
+            Joiner.on(",\n    ").join(args)));
+  }
+
+  @Test
+  public void testFakeMerge_unrelatedHistoryNotAllowed_skipsMerge() throws Exception {
+    Path otherRepoPath = Files.createTempDirectory("otherRepo");
+    GitDestination destination = destination(FAKE_MERGE, /* allowUnrelatedHistory= */ false);
+    migrateOriginChange(destination, "Base change\n", "not important");
+
+    GitRepository otherRepo =
+        GitRepository.newRepo(/* verbose= */ true, otherRepoPath, getGitEnv()).init(repoFormat);
+    GitRevision unrelatedRevision =
+        singleChange(otherRepoPath, otherRepo, "unrelated.txt", "Unrelated commit");
+
+    migrateOriginChange(
+        destination,
+        String.format(
+            """
+            Test change
+
+            %s=file://%s %s
+            """,
+            GitModule.DEFAULT_INTEGRATE_LABEL,
+            otherRepo.getWorkTree(),
+            otherRepo.getPrimaryBranch()),
+        "some content");
+
+    assertThat(
+            console.getMessages().stream()
+                .filter(e -> e.getType() == MessageType.WARNING)
+                .anyMatch(
+                    msg ->
+                        msg.getText().contains("Skipping creation of merge for")
+                            && msg.getText().contains("cannot find a common parent")))
+        .isTrue();
+
+    GitLogEntry latestMigrated = getLastMigratedChange(primaryBranch);
+    // Because merge creation was skipped, latestMigrated only has 1 parent (the base change)
+    assertThat(latestMigrated.parents()).hasSize(1);
+  }
+
+  @Test
+  public void testFakeMerge_unrelatedHistoryAllowed_createsMerge() throws Exception {
+    Path otherRepoPath = Files.createTempDirectory("otherRepo");
+    GitDestination destination = destination(FAKE_MERGE, /* allowUnrelatedHistory= */ true);
+    migrateOriginChange(destination, "Base change\n", "not important");
+
+    GitRepository otherRepo =
+        GitRepository.newRepo(/* verbose= */ true, otherRepoPath, getGitEnv()).init(repoFormat);
+    GitRevision unrelatedRevision =
+        singleChange(otherRepoPath, otherRepo, "unrelated.txt", "Unrelated commit");
+
+    GitLogEntry baseChange = getLastMigratedChange(primaryBranch);
+
+    migrateOriginChange(
+        destination,
+        String.format(
+            """
+            Test change
+
+            %s=file://%s %s
+            """,
+            GitModule.DEFAULT_INTEGRATE_LABEL,
+            otherRepo.getWorkTree(),
+            otherRepo.getPrimaryBranch()),
+        "some content");
+
+    assertThat(
+            console.getMessages().stream()
+                .filter(e -> e.getType() == MessageType.WARNING)
+                .anyMatch(msg -> msg.getText().contains("Skipping creation of merge for")))
+        .isFalse();
+
+    GitLogEntry latestMigrated = getLastMigratedChange(primaryBranch);
+    assertThat(latestMigrated.body())
+        .isEqualTo(
+            "Merge of "
+                + unrelatedRevision.getHash()
+                + "\n\n"
+                + DummyOrigin.LABEL_NAME
+                + ": test\n");
+
+    assertThat(Lists.transform(latestMigrated.parents(), GitRevision::getHash))
+        .isEqualTo(Lists.newArrayList(baseChange.commit().getHash(), unrelatedRevision.getHash()));
   }
 
   @Test
@@ -805,18 +906,6 @@ public class GitDestinationIntegrateTest {
         .assertThat()
         .onceInLog(
             MessageType.WARNING, "failIfIntegrateCommitNotFound is true, re-throwing exception");
-  }
-
-  private GitDestination destination(String... args) throws ValidationException {
-    return skylark.eval(
-        "r",
-        String.format(
-            """
-            r = git.destination(
-                %s
-            )\
-            """,
-            Joiner.on(",\n    ").join(args)));
   }
 
   private void migrateOriginChange(GitDestination destination, String summary, String content)

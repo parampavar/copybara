@@ -465,6 +465,12 @@ public class GitModule implements LabelsAwareModule, StarlarkValue {
                 "If we should ignore integrate errors and continue the migration without the"
                     + " integrate",
             defaultValue = "True"),
+        @Param(
+            name = "allow_unrelated_history",
+            named = true,
+            doc =
+                "If true allow integrates of unrelated histories.",
+            defaultValue = "False"),
       })
   @Example(
       title = "Integrate changes from a review url",
@@ -482,10 +488,14 @@ public class GitModule implements LabelsAwareModule, StarlarkValue {
               + " is found, it will fetch the git url and add that change as an additional parent"
               + " to the migration commit (merge). It will fake-merge any change from the url that"
               + " matches destination_files but it will include changes not matching it.")
-  public GitIntegrateChanges integrate(String label, String strategy, Boolean ignoreErrors)
+  public GitIntegrateChanges integrate(
+      String label, String strategy, Boolean ignoreErrors, Boolean allowUnrelatedHistory)
       throws EvalException {
     return new GitIntegrateChanges(
-        label, stringToEnum("strategy", strategy, Strategy.class), ignoreErrors);
+        label,
+        stringToEnum("strategy", strategy, Strategy.class),
+        ignoreErrors,
+        allowUnrelatedHistory != null && allowUnrelatedHistory);
   }
 
   @SuppressWarnings("unused")
