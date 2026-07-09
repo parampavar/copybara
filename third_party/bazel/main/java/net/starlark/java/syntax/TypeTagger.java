@@ -14,19 +14,21 @@
 
 package net.starlark.java.syntax;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.FormatMethod;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import javax.annotation.Nullable;
 import net.starlark.java.spelling.SpellChecker;
-import net.starlark.java.syntax.Resolver.Module;
 import net.starlark.java.syntax.Resolver.Scope;
 
 /**
@@ -46,13 +48,58 @@ import net.starlark.java.syntax.Resolver.Scope;
  */
 public final class TypeTagger extends NodeVisitor {
 
-  private final Module module;
+  /**
+   * An immutable view of a {@code load()} dependency. Provides the exported symbols (in practice:
+   * the evaluated module's global variables) and their types.
+   *
+   * <p>Contrast with {@link Resolver.Module}, which resolves a program's own names during the
+   * process of its compilation and type checking. A {@link LoadableModule} and {@link
+   * Resolver.Module} in theory need not be objects of the same class (although in practice, they
+   * are; see {@link net.starlark.java.eval.Module}).
+   */
+  public interface LoadableModule {
+    /** Returns the symbols (in practice, global variables) exported by this module. */
+    Set<String> getExports();
 
-  private final List<SyntaxError> errors;
+    /** Returns whether the module exports a given symbol. */
+    boolean hasExport(String name);
+
+    /**
+     * Returns the Starlark type of the specified exported symbol, or null if the export was not
+     * assigned a type (in particular, if type tagging for the module was disabled).
+     */
+    @Nullable
+    StarlarkType getExportType(String name);
+
+    /**
+     * Returns the Starlark type constructor value of the specified exported symbol, or null if the
+     * export does not have a type constructor value.
+     */
+    @Nullable
+    TypeConstructor getExportTypeConstructor(String name);
+  }
+
+  /** Returns the named module, or null if not found. */
+  @FunctionalInterface
+  public interface Loader {
+    @Nullable
+    LoadableModule load(String importName);
+  }
+
+  private final TypeTable typeTable;
+
+  private final Resolver.Module module;
+
+  @Nullable private final Loader loader;
 
   // Empty if we are tagging a type expression (inside which no function definitions are allowed).
   // Populated and mutated by visitation.
   private final ArrayDeque<Resolver.Function> functionStack = new ArrayDeque<>();
+
+  // Global and file-local symbols of type constructors defined or loaded in this file. Used only
+  // for spelling suggestions in error messages. (Note that TypeTable doesn't store names of type
+  // constructor symbols.)
+  private final LinkedHashSet<String> fileDefinedTypeConstructorNames = new LinkedHashSet<>();
 
   // Formats and reports an error at the start of the specified node.
   @FormatMethod
@@ -63,17 +110,26 @@ public final class TypeTagger extends NodeVisitor {
   // Formats and reports an error at the specified location.
   @FormatMethod
   private void errorf(Location loc, String format, Object... args) {
-    errors.add(new SyntaxError(loc, String.format(format, args)));
+    typeTable.errors.add(new SyntaxError(loc, String.format(format, args)));
   }
 
-  private TypeTagger(List<SyntaxError> errors, Module module) {
-    this.errors = errors;
+  private TypeTagger(TypeTable typeTable, Resolver.Module module, @Nullable Loader loader) {
+    this.typeTable = typeTable;
     this.module = module;
+    this.loader = loader;
   }
 
-  private TypeTagger(List<SyntaxError> errors, Module module, Resolver.Function toplevel) {
-    this(errors, module);
+  private TypeTagger(
+      TypeTable typeTable,
+      Resolver.Module module,
+      @Nullable Loader loader,
+      Resolver.Function toplevel) {
+    this(typeTable, module, loader);
     functionStack.push(toplevel);
+  }
+
+  TypeTable getTypeTable() {
+    return typeTable;
   }
 
   /**
@@ -85,23 +141,36 @@ public final class TypeTagger extends NodeVisitor {
   private TypeConstructor resolveTypeConstructor(Identifier id) {
     String name = id.getName();
 
-    var scope = id.getBinding().getScope();
+    var binding = id.getBinding();
+    var scope = binding.getScope();
+    @Nullable TypeConstructor constructor = null;
     if (!(scope == Scope.UNIVERSAL || scope == Scope.PREDECLARED || scope == Scope.GLOBAL)) {
-      // Local names cannot by types. Don't allow `x: Foo` to succeed if Foo is a local shadowing a
-      // type name.
-      errorf(id, "local symbol '%s' cannot be used as a type", name);
-      return null;
+      // Non-file-level local names cannot be types. Don't allow `x: Foo` to succeed if Foo is a
+      // local shadowing a type name.
+      if (binding.isToplevelLocal()) {
+        constructor = typeTable.getTypeConstructor(binding);
+      }
+      if (constructor != null) {
+        return constructor;
+      } else {
+        errorf(id, "local symbol '%s' cannot be used as a type", name);
+        return null;
+      }
     }
 
     try {
-      TypeConstructor constructor = module.getTypeConstructor(name);
+      constructor = module.getTypeConstructor(name);
       if (constructor == null) {
         errorf(id, "%s symbol '%s' cannot be used as a type", scope, name);
         return null;
       }
       return constructor;
     } catch (Resolver.Module.Undefined ex) {
-      String suggestion = ex.candidates != null ? SpellChecker.didYouMean(name, ex.candidates) : "";
+      LinkedHashSet<String> candidates = new LinkedHashSet<>(fileDefinedTypeConstructorNames);
+      if (ex.candidates != null) {
+        candidates.addAll(ex.candidates);
+      }
+      String suggestion = candidates.isEmpty() ? "" : SpellChecker.didYouMean(name, candidates);
       errorf(id, "%s%s", ex.getMessage(), suggestion);
       return null;
     }
@@ -158,6 +227,22 @@ public final class TypeTagger extends NodeVisitor {
           return TypeConstructor.Arg.EMPTY_TUPLE;
         }
       }
+      case DICT_EXPR -> {
+        DictExpression dictExpr = (DictExpression) expr;
+        LinkedHashMap<String, StarlarkType> types = new LinkedHashMap<>();
+        for (DictExpression.Entry entry : dictExpr.getEntries()) {
+          if (entry.getKey() instanceof StringLiteral str) {
+            String key = str.getValue();
+            @Nullable var previous = types.put(key, extractType(entry.getValue()));
+            if (previous != null) {
+              errorf(str, "dictionary expression has duplicate key: %s", str);
+            }
+          } else {
+            errorf(entry.getKey(), "expected a string literal but got '%s'", entry.getKey());
+          }
+        }
+        return new TypeConstructor.Arg.TypeDict(ImmutableMap.copyOf(types));
+      }
       default -> {
         // fall through
       }
@@ -179,19 +264,23 @@ public final class TypeTagger extends NodeVisitor {
   /**
    * Statically evaluates a type expression to the {@link StarlarkType} it denotes.
    *
-   * @param expr a valid type expression with binding information resolved
-   * @param module a static Module containing type information for the bindings used in type
-   *     expressions
+   * @param expr a valid type expression with binding information resolved, which must have been
+   *     parsed with the appropriate {@link FileOptions} set; see {@link #tagFile}
+   * @param exprFunction the resolver function for {@code expr} constructed by {@link
+   *     Resolver#resolveExpr()}
+   * @param module a static Resolver.Module containing type information for the bindings used in
+   *     type expressions
    * @throws SyntaxError.Exception if expr is not a type expression or if it could not be evaluated
    *     to a type.
    */
-  public static StarlarkType extractType(Expression expr, Module module)
+  static StarlarkType extractType(
+      Expression expr, Resolver.Function exprFunction, Resolver.Module module)
       throws SyntaxError.Exception {
-    List<SyntaxError> errors = new ArrayList<>();
-    TypeTagger r = new TypeTagger(errors, module);
+    // loader is null because expressions cannot contain load statements.
+    TypeTagger r = new TypeTagger(new TypeTable(exprFunction), module, /* loader= */ null);
     StarlarkType result = r.extractType(expr);
-    if (!errors.isEmpty()) {
-      throw new SyntaxError.Exception(r.errors);
+    if (!r.getTypeTable().ok()) {
+      throw new SyntaxError.Exception(r.getTypeTable().errors());
     }
     return result;
   }
@@ -274,7 +363,7 @@ public final class TypeTagger extends NodeVisitor {
    */
   private void setType(Node node, Identifier id, StarlarkType type) {
     Resolver.Binding binding = id.getBinding();
-    Preconditions.checkNotNull(binding, "no binding set on identifier '%s'", id.getName());
+    checkNotNull(binding, "no binding set on identifier '%s'", id.getName());
 
     if (binding.getFirst() != id) {
       if (node instanceof DefStatement) {
@@ -296,15 +385,54 @@ public final class TypeTagger extends NodeVisitor {
       if (binding.isSyntactic()) {
         errorf(binding.getFirst(), "'%s' previously declared here", id.getName());
       }
+      errorIfTypeConstructor(node, id);
       return;
     }
 
-    if (binding.getType() != null) {
+    @Nullable StarlarkType prevType = typeTable.getType(binding);
+    if (prevType != null) {
       throw new IllegalArgumentException(
-          String.format(
-              "Expected type of binding %s to be null but was %s", binding, binding.getType()));
+          String.format("Expected type of binding %s to be null but was %s", binding, prevType));
     }
-    binding.setType(type);
+    typeTable.setDeclaredType(binding, type);
+  }
+
+  /**
+   * Sets the type constructor value associated with a given binding, making it available for
+   * subsequent type tagging and checking.
+   */
+  private void setTypeConstructor(Node node, Identifier id, TypeConstructor typeConstructor) {
+    Resolver.Binding binding = id.getBinding();
+    checkNotNull(binding, "no binding set on identifier '%s'", id.getName());
+    checkArgument(
+        binding.getScope() == Resolver.Scope.GLOBAL || binding.isToplevelLocal(),
+        "'%s' must be either a global or a file-level local",
+        id.getName());
+
+    if (errorIfTypeConstructor(node, id)) {
+      return;
+    }
+
+    fileDefinedTypeConstructorNames.add(id.getName());
+    typeTable.setTypeConstructor(binding, typeConstructor);
+  }
+
+  /**
+   * Returns true and logs an error if the given symbol has been associated with a type constructor;
+   * otherwise, returns false.
+   */
+  private boolean errorIfTypeConstructor(Node node, Identifier id) {
+    if (typeTable.getTypeConstructor(id.getBinding()) != null) {
+      // A type constructor cannot be redeclared, even if allowTopLevelRebinding is set.
+      // TODO: #27370 - Allow types to be redeclared in REPL. What we really want to prevent is
+      // redeclaration only within the same program (the same set of statements passed to
+      // TypeTagger/TypeChecker); but redeclaration in a different program which happens to mutate
+      // the same globals should be fine.
+      errorf(node, "type '%s' redeclared", id.getName());
+      errorf(id.getBinding().getFirst(), "'%s' previously declared here", id.getName());
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -312,15 +440,31 @@ public final class TypeTagger extends NodeVisitor {
    *
    * <p>Throws {@link IllegalArgumentException} if the type is already set.
    */
-  private static void setType(Resolver.Function resolved, Types.CallableType type) {
-    Preconditions.checkNotNull(resolved);
-    if (resolved.getFunctionType() != null) {
+  private static void setType(
+      Resolver.Function resolved, Types.CallableType type, TypeTable typeTable) {
+    checkNotNull(resolved);
+    @Nullable StarlarkType prevType = typeTable.getType(resolved);
+    if (prevType != null) {
       throw new IllegalArgumentException(
           String.format(
               "Expected type of resolved function %s to be null but was %s",
-              resolved.getName(), resolved.getFunctionType()));
+              resolved.getName(), prevType));
     }
-    resolved.setFunctionType(type);
+    typeTable.setType(resolved, type);
+  }
+
+  private void setType(Resolver.Function resolved, Types.CallableType type) {
+    setType(resolved, type, typeTable);
+  }
+
+  private void visitProgram(Program prog) {
+    checkState(
+        functionStack.isEmpty(),
+        "When tagging a Program, functionStack is expected to be initially empty");
+    Resolver.Function toplevel = prog.getResolvedFunction();
+    this.functionStack.push(toplevel);
+    visitBlock(toplevel.getBody());
+    checkState(functionStack.pop().equals(toplevel));
   }
 
   @Override
@@ -340,6 +484,14 @@ public final class TypeTagger extends NodeVisitor {
       setUsesTypeSyntax();
       StarlarkType type = extractType(assignment.getType());
       setType(assignment, (Identifier) assignment.getLHS(), type);
+    }
+
+    for (Identifier id : Identifier.boundIdentifiers(assignment.getLHS())) {
+      // TODO: #27370 - This is brittle: if loadsBindGlobally and allowToplevelRebinding are both
+      // set, the exporting file may break the loading file by changing an exported value to be a
+      // TypeConstructor instance. One solution may be to run the check only for symbols which are
+      // used by type annotations in this file. (That could also fix the REPL use case.)
+      errorIfTypeConstructor(assignment, id);
     }
 
     // Traverse children; RHS could contain a lambda.
@@ -379,8 +531,41 @@ public final class TypeTagger extends NodeVisitor {
   }
 
   @Override
+  public void visit(LoadStatement load) {
+    if (loader == null) {
+      errorf(load, "load statements are not supported because no module loader has been defined");
+      return;
+    }
+    String importName = load.getImport().getValue();
+    @Nullable LoadableModule loadedModule = loader.load(importName);
+    if (loadedModule == null) {
+      errorf(load, "module '%s' not found", importName);
+      return;
+    }
+    for (LoadStatement.Binding binding : load.getBindings()) {
+      String originalName = binding.getOriginalName().getName();
+      if (!loadedModule.hasExport(originalName)) {
+        errorf(
+            binding.getOriginalName(),
+            "module '%s' does not contain symbol '%s'%s",
+            importName,
+            originalName,
+            SpellChecker.didYouMean(originalName, loadedModule.getExports()));
+        continue;
+      }
+      setType(load, binding.getLocalName(), loadedModule.getExportType(originalName));
+      @Nullable
+      TypeConstructor typeConstructor = loadedModule.getExportTypeConstructor(originalName);
+      if (typeConstructor != null) {
+        setTypeConstructor(load, binding.getLocalName(), typeConstructor);
+      }
+    }
+  }
+
+  @Override
   public void visit(TypeAliasStatement node) {
     setUsesTypeSyntax();
+    errorIfTypeConstructor(node, node.getIdentifier());
     super.visit(node);
   }
 
@@ -417,18 +602,51 @@ public final class TypeTagger extends NodeVisitor {
   // A's binding with the evaluation of type B. It probably should live in outer logic that
   // determines the type environment.
 
+  private static void checkFileOptions(FileOptions options) {
+    checkArgument(
+        options.resolveTypeSyntax(), "type tagging requires that resolveTypeSyntax is set");
+    checkArgument(
+        !options.tolerateInvalidTypeExpressions(),
+        "type tagging requires that tolerateInvalidTypeExpressions is not set");
+  }
+
   /**
-   * Sets the Starlark types of the {@link Resolver.Function}s and {@link Resolver.Binding}s in the
-   * given AST (which must have already been processed by {@link Resolver}), based on the supplied
-   * annotations.
-   *
-   * <p>The file must not have any existing type information in its resolved functions and bindings.
+   * Determines the Starlark types of the {@link Resolver.Function}s and {@link Resolver.Binding}s
+   * in the given AST (which must have already been processed by {@link Resolver}), based on the
+   * supplied annotations. Returns the resulting {@link TypeTable} for the file.
    *
    * <p>Any errors are appended to the file's list of errors.
+   *
+   * @throws IllegalArgumentException if the file's {@link FileOptions} don't contain {@link
+   *     FileOptions#resolveTypeSyntax()} or do contain {@link
+   *     FileOptions#tolerateInvalidTypeExpressions()}.
+   * @param loader a {@link Loader} for loading modules via load() statements; may be null if the
+   *     file is known to not contain load() statements
    */
-  public static void tagFile(StarlarkFile file, Module module) {
-    TypeTagger r = new TypeTagger(file.errors, module);
+  public static TypeTable tagFile(
+      StarlarkFile file, Resolver.Module module, @Nullable Loader loader) {
+    checkFileOptions(file.getOptions());
+    TypeTable typeTable = new TypeTable(file);
+    TypeTagger r = new TypeTagger(typeTable, module, loader);
     r.visit(file);
+    return typeTable;
+  }
+
+  /**
+   * Like {@link #tagFile}, but on an already-compiled {@link Program}.
+   *
+   * <p>The program is *not* mutated. In particular, the pre-existing {@link Program#getTypeTable}
+   * (if any) is ignored. Any errors are reported in the returned type table's {@link
+   * TypeTable#errors()} list.
+   */
+  public static TypeTable tagProgram(
+      Program prog, Resolver.Module module, @Nullable Loader loader) {
+    checkFileOptions(prog.getOptions());
+    Resolver.Function toplevel = prog.getResolvedFunction();
+    TypeTable typeTable = new TypeTable(toplevel);
+    TypeTagger r = new TypeTagger(typeTable, module, loader);
+    r.visitProgram(prog);
+    return typeTable;
   }
 
   /**
@@ -439,42 +657,27 @@ public final class TypeTagger extends NodeVisitor {
    * @param function the {@link Resolver.Function} that the resolver generated to wrap an
    *     expression.
    */
-  public static void tagExpr(Expression expr, Resolver.Function function, Module module)
+  public static TypeTable tagExpr(
+      Expression expr, Resolver.Function function, Resolver.Module module)
       throws SyntaxError.Exception {
-    List<SyntaxError> errors = new ArrayList<>();
-    TypeTagger r = new TypeTagger(errors, module, function);
+    TypeTable typeTable = new TypeTable(function);
+    // Use a null loader because load() cannot appear in expressions.
+    TypeTagger r = new TypeTagger(typeTable, module, /* loader= */ null, function);
 
     r.visit(expr);
 
-    if (!errors.isEmpty()) {
-      throw new SyntaxError.Exception(errors);
+    if (!typeTable.ok()) {
+      throw new SyntaxError.Exception(typeTable.errors());
     }
-  }
-
-  /**
-   * Sets the Starlark type on a {@link Resolver.Function} that the resolver generated to wrap an
-   * expression.
-   */
-  public static void tagExprFunction(Resolver.Function function, StarlarkType exprType) {
-    Types.CallableType functionType =
-        Types.callable(
-            /* parameterNames= */ ImmutableList.of(),
-            /* parameterTypes= */ ImmutableList.of(),
-            /* numPositionalOnlyParameters= */ 0,
-            /* numPositionalParameters= */ 0,
-            /* mandatoryParams= */ ImmutableSet.of(),
-            /* varargsType= */ null,
-            /* kwargsType= */ null,
-            /* returns= */ exprType);
-    setType(function, functionType);
+    return typeTable;
   }
 
   private void setUsesTypeSyntax() {
     // If anything in the file (or in the expr if TypeTagger is invoked via tagExpr()) uses type
     // syntax, the toplevel is considered to use type syntax.
-    functionStack.peekLast().setUsesTypeSyntax();
+    typeTable.setUsesTypeSyntax(functionStack.peekLast());
     // If anything nested in the most proximate def statement uses type syntax, the def statement
     // is considered to use type syntax
-    functionStack.peek().setUsesTypeSyntax();
+    typeTable.setUsesTypeSyntax(functionStack.peek());
   }
 }
