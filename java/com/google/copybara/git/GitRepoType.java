@@ -57,19 +57,19 @@ public enum GitRepoType {
         boolean describeVersion, boolean partialFetch, Optional<Integer> fetchDepth)
         throws RepoException, ValidationException {
       logger.atInfo().log("Resolving %s reference: %s", repoUrl, ref);
-      Matcher sha1WithPatchSet = SHA_1_WITH_REVIEW_DATA.matcher(ref);
-      if (sha1WithPatchSet.matches()) {
+      Matcher shaWithPatchSet = SHA_WITH_REVIEW_DATA.matcher(ref);
+      if (shaWithPatchSet.matches()) {
         GitRevision rev =
             repository.fetchSingleRefWithTags(
                 repoUrl,
-                sha1WithPatchSet.group(1),
+                shaWithPatchSet.group(1),
                 /* fetchTags= */ describeVersion,
                 partialFetch,
                 fetchDepth);
         return new GitRevision(
             repository,
             rev.getHash(),
-            sha1WithPatchSet.group(2),
+            shaWithPatchSet.group(2),
             rev.contextReference(),
             rev.associatedLabels(),
             repoUrl);
@@ -231,7 +231,7 @@ public enum GitRepoType {
   private static final Pattern FILE_URL = Pattern.compile("file://(.*)");
 
   /** Example: "54d2a09b272f22a6d27e76b891f36213b98e0ddc random text" */
-  private static final Pattern SHA_1_WITH_REVIEW_DATA =
+  private static final Pattern SHA_WITH_REVIEW_DATA =
       Pattern.compile("(" + GitRevision.COMPLETE_GIT_HASH_PATTERN.pattern() + ") (.+)");
 
   // TODO(malcon): Remove all these once internal code reveres to GerritChange fields

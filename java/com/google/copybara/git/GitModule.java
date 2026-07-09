@@ -205,7 +205,7 @@ public class GitModule implements LabelsAwareModule, StarlarkValue {
               + " formats as reference (When copybara is called in the form of `copybara config"
               + " workflow reference`):<br><ul><li>**Branch name:** For example"
               + " `master`</li><li>**An arbitrary reference:**"
-              + " `refs/changes/20/50820/1`</li><li>**A SHA-1:** Note that it has to be reachable"
+              + " `refs/changes/20/50820/1`</li><li>**A SHA:** Note that it has to be reachable"
               + " from the default refspec</li><li>**A Git repository URL and reference:**"
               + " `http://github.com/foo master`</li><li>**A GitHub pull request URL:**"
               + " `https://github.com/some_project/pull/1784`</li></ul><br>So for example,"
@@ -948,7 +948,7 @@ public class GitModule implements LabelsAwareModule, StarlarkValue {
               + ": GitHub url of the Pull Request.\n"
               + "  - "
               + GITHUB_PR_HEAD_SHA
-              + ": The SHA-1 of the head commit of the pull request.\n"
+              + ": The SHA of the head commit of the pull request.\n"
               + "  - "
               + GITHUB_PR_USER
               + ": The login of the author the pull request.\n"

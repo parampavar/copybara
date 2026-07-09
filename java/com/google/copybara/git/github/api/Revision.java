@@ -24,7 +24,7 @@ import net.starlark.java.eval.StarlarkValue;
 
 /**
  * Represents a revision: information about the origin of a pull request like the ref (branch) or
- * specific SHA-1.
+ * specific SHA.
  */
 @StarlarkBuiltin(
     name = "github_api_revision_obj",

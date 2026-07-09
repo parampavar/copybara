@@ -48,17 +48,21 @@ class GitHubPrIntegrateLabel implements IntegrateLabel {
   private final String projectId;
   private final long prNumber;
   private final String originBranch;
-  @Nullable
-  private final String sha1;
+  @Nullable private final String sha;
 
-  GitHubPrIntegrateLabel(GitRepository repository, GeneralOptions generalOptions, String projectId,
-      long prNumber, String originBranch, @Nullable String sha1) {
+  GitHubPrIntegrateLabel(
+      GitRepository repository,
+      GeneralOptions generalOptions,
+      String projectId,
+      long prNumber,
+      String originBranch,
+      @Nullable String sha) {
     this.repository = Preconditions.checkNotNull(repository);
     this.generalOptions = Preconditions.checkNotNull(generalOptions);
     this.projectId = Preconditions.checkNotNull(projectId);
     this.prNumber = prNumber;
     this.originBranch = Preconditions.checkNotNull(originBranch);
-    this.sha1 = sha1;
+    this.sha = sha;
   }
 
   @Nullable
@@ -76,8 +80,9 @@ class GitHubPrIntegrateLabel implements IntegrateLabel {
 
   @Override
   public String toString() {
-    return String.format("https://github.com/%s/pull/%d from %s%s", projectId, prNumber,
-        originBranch, sha1 != null ? " " + sha1 : "");
+    return String.format(
+        "https://github.com/%s/pull/%d from %s%s",
+        projectId, prNumber, originBranch, sha != null ? " " + sha : "");
   }
 
   @Override
@@ -92,10 +97,10 @@ class GitHubPrIntegrateLabel implements IntegrateLabel {
     String repoUrl = "https://github.com/" + projectId;
     GitRevision gitRevision = GitRepoType.GITHUB.resolveRef(repository, repoUrl, pr,
         generalOptions, /*describeVersion=*/ false, /*partialFetch*/ false, Optional.empty());
-    if (sha1 == null) {
+    if (sha == null) {
       return gitRevision;
     }
-    if (sha1.equals(gitRevision.getHash())) {
+    if (sha.equals(gitRevision.getHash())) {
       return gitRevision;
     }
     generalOptions
@@ -103,8 +108,8 @@ class GitHubPrIntegrateLabel implements IntegrateLabel {
         .warnFmt(
             "Pull Request %s has more changes after %s (PR HEAD is %s)."
                 + " Not all changes might be migrated",
-            pr, sha1, gitRevision.getHash());
-    return repository.resolveReferenceWithContext(sha1, gitRevision.contextReference(), repoUrl);
+            pr, sha, gitRevision.getHash());
+    return repository.resolveReferenceWithContext(sha, gitRevision.contextReference(), repoUrl);
   }
 
   public String getProjectId() {

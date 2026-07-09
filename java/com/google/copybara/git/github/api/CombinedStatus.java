@@ -59,7 +59,7 @@ public class CombinedStatus implements StarlarkValue {
     return state.toString().toLowerCase();
   }
 
-  @StarlarkMethod(name = "sha", doc = "The SHA-1 of the commit", structField = true)
+  @StarlarkMethod(name = "sha", doc = "The SHA of the commit", structField = true)
   public String getSha() {
     return sha;
   }

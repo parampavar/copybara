@@ -137,11 +137,11 @@ public class GitRepository {
           ""
               // When fetching a ref like 'refs/foo' fails.
               + "(fatal: [Cc]ouldn't find remote ref"
-              // When fetching a SHA-1 ref
+              // When fetching a SHA ref
               + "|no such remote ref"
               // New output for fetching (git version 2.17)
               + "|fatal: no matching remote head"
-              // Local fetch for a SHA-1 fails
+              // Local fetch for a SHA fails
               + "|upload-pack: not our ref"
               // Gerrit when fetching
               + "|ERR want .+ not valid)");
@@ -153,10 +153,7 @@ public class GitRepository {
               // Protected brach errors in GitHub
               + "([Pp]rotected branch hook declined)");
 
-
-  /**
-   * Label to be used for marking the original revision id (Git SHA-1) for migrated commits.
-   */
+  /** Label to be used for marking the original revision id (Git SHA) for migrated commits. */
   public static final String GIT_ORIGIN_REV_ID = "GitOrigin-RevId";
 
   // Git exits with 128 in several circumstances. For example failed rebase.
@@ -426,12 +423,12 @@ public class GitRepository {
       throw new CannotResolveRevisionException("Fetching refspecs that"
           + " contain local ref path locations or wildcards is not supported. Invalid ref: " + ref);
     }
-    // This is not strictly necessary for some Git repos that allow fetching from any sha1 ref, like
+    // This is not strictly necessary for some Git repos that allow fetching from any SHA ref, like
     // servers configured with 'git config uploadpack.allowReachableSHA1InWant true' (such as
     // GitHub).
     // To support servers which are not, what we do is fetch the default refspec (see the comment
-    // below) and hope the sha1 is reachable from heads.
-    // If we fail to find the SHA-1 with that fetch we fetch the SHA-1 directly and hope the server
+    // below) and hope the SHA is reachable from heads.
+    // If we fail to find the SHA with that fetch we fetch the SHA directly and hope the server
     // allows to download it.
     boolean isHashRef = isHashReference(ref);
     if (isHashRef) {
@@ -449,12 +446,12 @@ public class GitRepository {
         // Some servers are configured without HEAD. That is fine, we'll try fetching the SHA
         // instead.
         logger.atWarning().withCause(e).log(
-            "Cannot fetch remote HEAD. Ignoring and fetching SHA-1 directly");
+            "Cannot fetch remote HEAD. Ignoring and fetching SHA directly");
       }
       try {
         return resolveReferenceWithContext(ref, /*contextRef=*/ref, url);
       } catch (RepoException | CannotResolveRevisionException ignore) {
-        // Ignore, the fetch below will attempt using the SHA-1.
+        // Ignore, the fetch below will attempt using the SHA.
       }
     }
 
@@ -708,8 +705,8 @@ public class GitRepository {
    * @param refs - see <refs> in git help ls-remote
    * @param gitEnv - determines where the Git binaries are
    * @param maxLogLines - Limit log lines to the number specified. -1 for unlimited
-   * @return - a map of refs to sha1 from the git ls-remote output. Can also contain symbolic refs
-   *     if --symref is set.
+   * @return - a map of refs to SHA from the git ls-remote output. Can also contain symbolic refs if
+   *     --symref is set.
    * @throws RepoException if the operation fails
    */
   public static Map<String, String> lsRemote(
@@ -735,8 +732,8 @@ public class GitRepository {
    * @param gitEnv - determines where the Git binaries are
    * @param flags - flags to pass to the ls-remote command.
    * @param maxLsRemoteLimit - Limit the number of ls remote lines to the number specified.
-   * @return - a map of refs to sha1 from the git ls-remote output. Can also contain symbolic refs
-   *     if --symref is set.
+   * @return - a map of refs to SHA from the git ls-remote output. Can also contain symbolic refs if
+   *     --symref is set.
    * @throws RepoException if the operation fails
    */
   public static ImmutableMap<String, String> lsRemote(
@@ -825,7 +822,7 @@ public class GitRepository {
    * environment and {@link #DEFAULT_MAX_LOG_LINES} as max number of log lines.
    *
    * @param refs - see <refs> in git help ls-remote
-   * @return - a map of refs to sha1 from the git ls-remote output.
+   * @return - a map of refs to SHA from the git ls-remote output.
    * @throws RepoException if the operation fails
    */
   public Map<String, String> lsRemote(String url, Collection<String> refs)
@@ -839,7 +836,7 @@ public class GitRepository {
    *
    * @param refs - see <refs> in git help ls-remote
    * @param maxLogLines - Limit log lines to the number specified. -1 for unlimited
-   * @return - a map of refs to sha1 from the git ls-remote output.
+   * @return - a map of refs to SHA from the git ls-remote output.
    * @throws RepoException if the operation fails
    */
   public Map<String, String> lsRemote(String url, Collection<String> refs, int maxLogLines)
@@ -854,7 +851,7 @@ public class GitRepository {
    * @param refs - see <refs> in git help ls-remote
    * @param maxLogLines - Limit log lines to the number specified. -1 for unlimited
    * @param flags - additional flags to pass to ls-remote
-   * @return - a map of refs to sha1 from the git ls-remote output.
+   * @return - a map of refs to SHA from the git ls-remote output.
    * @throws RepoException if the operation fails
    */
   public Map<String, String> lsRemote(
@@ -870,7 +867,7 @@ public class GitRepository {
    * @param refs - see <refs> in git help ls-remote
    * @param maxLsRemoteLimit - Limit the number of ls remote lines to the number specified
    * @param flags - additional flags to pass to ls-remote
-   * @return - a map of refs to sha1 from the git ls-remote output
+   * @return - a map of refs to SHA from the git ls-remote output
    * @throws RepoException if the operation fails
    */
   public Map<String, String> lsRemote(
@@ -884,7 +881,7 @@ public class GitRepository {
    *
    * @param refs - see <refs> in git help ls-remote
    * @param flags - additional flags to pass to ls-remote
-   * @return - a map of refs to sha1 from the git ls-remote output.
+   * @return - a map of refs to SHA from the git ls-remote output.
    * @throws RepoException if the operation fails
    */
   public Map<String, String> lsRemote(String url, Collection<String> refs, Collection<String> flags)
@@ -916,7 +913,7 @@ public class GitRepository {
 
   /**
    * Execute show-ref git command in the local repository and returns a map from reference name to
-   * GitReference(SHA-1).
+   * GitReference(SHA).
    *
    * @param refs the refs to pass to the git show-ref command
    * @return the result of git show-ref
@@ -941,7 +938,7 @@ public class GitRepository {
           strings.size() == 2 && COMPLETE_HASH_PATTERN.matcher(strings.get(0)).matches(),
           "Cannot parse line: '%s'",
           line);
-      // Ref -> SHA1
+      // Ref -> SHA
       result.put(strings.get(1), new GitRevision(this, strings.get(0)));
     }
     return result.buildOrThrow();
@@ -950,7 +947,7 @@ public class GitRepository {
 
   /**
    * Execute show-ref git command in the local repository and returns a map from reference name to
-   * GitReference(SHA-1).
+   * GitReference(SHA).
    */
   public ImmutableMap<String, GitRevision> showRef() throws RepoException {
     return showRef(ImmutableList.of());
@@ -1291,7 +1288,7 @@ public class GitRepository {
   }
 
   /**
-   * Resolves a git reference to the SHA-1 reference
+   * Resolves a git reference to the SHA reference
    */
   public String parseRef(String ref) throws RepoException, CannotResolveRevisionException {
     // Runs rev-list on the reference and remove the extra newline from the output.
@@ -1300,12 +1297,12 @@ public class GitRepository {
     if (!result.getTerminationStatus().success()) {
       throw new CannotResolveRevisionException("Cannot find reference '" + ref + "'");
     }
-    String sha1 = result.getStdout().trim();
+    String sha = result.getStdout().trim();
     Verify.verify(
-        COMPLETE_HASH_PATTERN.matcher(sha1).matches(),
+        COMPLETE_HASH_PATTERN.matcher(sha).matches(),
         "Should be resolved to a complete hash: %s",
-        sha1);
-    return sha1;
+        sha);
+    return sha;
   }
 
   boolean refExists(String ref) throws RepoException {
@@ -1418,9 +1415,8 @@ public class GitRepository {
     }
   }
 
-  /** Return the symbolic-ref (branch name) of HEAD. If it fails, return the sha1 of HEAD*/
-  public GitRevision getHeadRef()
-      throws RepoException, CannotResolveRevisionException {
+  /** Return the symbolic-ref (branch name) of HEAD. If it fails, return the SHA of HEAD */
+  public GitRevision getHeadRef() throws RepoException, CannotResolveRevisionException {
     try {
       String reference = getPrimaryBranch();
       return new GitRevision(this, parseRef(reference), null, reference,
@@ -1430,9 +1426,8 @@ public class GitRepository {
     }
   }
 
-  /** Check whether the remote sha1's tree is the same as repo's HEAD */
-  public boolean hasSameTree(String remoteCommit)
-      throws RepoException {
+  /** Check whether the remote SHA's tree is the same as repo's HEAD */
+  public boolean hasSameTree(String remoteCommit) throws RepoException {
     GitLogEntry newChange = Iterables.getLast(this.log("HEAD").withLimit(1).run());
     this.simpleCommand("checkout", "-b", "cherry_pick" + UUID.randomUUID(), "HEAD~1");
     if (tryToCherryPick(remoteCommit)) {
@@ -1689,10 +1684,10 @@ public class GitRepository {
       String mode = matcher.group(1);
       GitObjectType objectType =
           GitObjectType.valueOf(matcher.group(2).toUpperCase(Locale.getDefault()));
-      String sha1 = matcher.group(3);
+      String sha = matcher.group(3);
       String path = matcher.group(4);
 
-      result.add(new TreeElement(objectType, sha1, path, mode));
+      result.add(new TreeElement(objectType, sha, path, mode));
     }
     return result.build();
   }
@@ -2212,10 +2207,10 @@ public class GitRepository {
   GitRevision resolveReferenceWithContext(String reference, @Nullable String contextRef,
       String url)
       throws RepoException, CannotResolveRevisionException {
-    // Nothing needs to be resolved, since it is a complete SHA-1. But we
+    // Nothing needs to be resolved, since it is a complete SHA. But we
     // check that the reference exists.
     if (GitRevision.COMPLETE_GIT_HASH_PATTERN.matcher(reference).matches()) {
-      if (checkSha1Exists(reference)) {
+      if (checkShaExists(reference)) {
         return new GitRevision(this, reference, url);
       }
       throw new CannotResolveRevisionException(
@@ -2232,10 +2227,10 @@ public class GitRepository {
    */
   public GitRevision resolveReference(String reference)
       throws RepoException, CannotResolveRevisionException {
-    // Nothing needs to be resolved, since it is a complete SHA-1. But we
+    // Nothing needs to be resolved, since it is a complete SHA. But we
     // check that the reference exists.
     if (GitRevision.COMPLETE_GIT_HASH_PATTERN.matcher(reference).matches()) {
-      if (checkSha1Exists(reference)) {
+      if (checkShaExists(reference)) {
         return new GitRevision(this, reference);
       }
       throw new CannotResolveRevisionException(
@@ -2245,9 +2240,9 @@ public class GitRepository {
   }
 
   /**
-   * Checks if a SHA-1 object exist in the repository
+   * Checks if a SHA object exist in the repository
    */
-  private boolean checkSha1Exists(String reference) throws RepoException {
+  private boolean checkShaExists(String reference) throws RepoException {
     ImmutableList<String> params = ImmutableList.of("cat-file", "-e", reference);
     CommandOutputWithStatus output = gitAllowNonZeroExit(NO_INPUT, params,
         DEFAULT_TIMEOUT);
@@ -2349,9 +2344,9 @@ public class GitRepository {
   }
 
   /**
-   * Creates a reference from a complete SHA-1 string without any validation that it exists.
+   * Creates a reference from a complete SHA string without any validation that it exists.
    */
-  private GitRevision createReferenceFromCompleteSha1(String ref) {
+  private GitRevision createReferenceFromCompleteHash(String ref) {
     return new GitRevision(this, ref);
   }
 
@@ -3060,7 +3055,7 @@ public class GitRepository {
         ImmutableList.Builder<GitRevision> parents = ImmutableList.builder();
         for (String parent : Splitter.on(" ").omitEmptyStrings()
             .split(getField(fields, PARENTS_FIELD))) {
-          parents.add(repo.createReferenceFromCompleteSha1(parent));
+          parents.add(repo.createReferenceFromCompleteHash(parent));
         }
 
         String tree = getField(fields, TREE_FIELD);
@@ -3069,13 +3064,13 @@ public class GitRepository {
         String tagString = includeTags ? getField(fields, TAG_FIELD) : null;
         GitRevision tag =
             tagString != null
-                ? repo.createReferenceFromCompleteSha1(commit).withContextReference(tagString)
+                ? repo.createReferenceFromCompleteHash(commit).withContextReference(tagString)
                 : null;
 
         try {
           commits.add(
               new GitLogEntry(
-                  repo.createReferenceFromCompleteSha1(commit),
+                  repo.createReferenceFromCompleteHash(commit),
                   parents.build(),
                   tree,
                   AuthorParser.parse(getField(fields, AUTHOR_FIELD)),

@@ -24,8 +24,8 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Given a requested version, if that version is a complete SHA-1, it returns
- * that version as the selected one.
+ * Given a requested version, if that version is a complete SHA, it returns that version as the
+ * selected one.
  */
 public class RequestedShaVersionSelector implements VersionSelector {
 

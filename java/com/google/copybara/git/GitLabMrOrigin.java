@@ -162,13 +162,13 @@ public class GitLabMrOrigin implements Origin<GitRevision> {
   @Override
   public GitRevision resolveLastRev(String reference) throws RepoException, ValidationException {
     reference = reference.trim();
-    String sha1 =
+    String sha =
         GitRevision.COMPLETE_GIT_HASH_PATTERN.matcher(reference).matches() ? reference : null;
     GitRepository repo = getRepository();
 
-    if (sha1 != null) {
-      doFetch(repo, ImmutableList.of(sha1));
-      return repo.resolveReference(sha1);
+    if (sha != null) {
+      doFetch(repo, ImmutableList.of(sha));
+      return repo.resolveReference(sha);
     } else {
       throw new CannotResolveRevisionException(
           String.format("'%s' is not a valid SHA.", reference));
@@ -177,7 +177,7 @@ public class GitLabMrOrigin implements Origin<GitRevision> {
 
   private static int parseReference(String reference) throws ValidationException {
     // For now, we just support the numeric ID as a reference. If we realize that we need to support
-    // SHA1s or a full ref path, we should change the below.
+    // SHAs or a full ref path, we should change the below.
     try {
       return Integer.parseInt(reference);
     } catch (NumberFormatException e) {

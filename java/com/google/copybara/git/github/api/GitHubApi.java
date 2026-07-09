@@ -434,12 +434,15 @@ public class GitHubApi {
     }
   }
 
-  public Status createStatus(String projectId, String sha1, CreateStatusRequest request)
+  public Status createStatus(String projectId, String sha, CreateStatusRequest request)
       throws RepoException, ValidationException {
     try (ProfilerTask ignore = profiler.start("github_api_create_status")) {
-      Status result = transport.post(
-          String.format(
-              "repos/%s/statuses/%s", projectId, sha1), request, Status.class, "Create status");
+      Status result =
+          transport.post(
+              String.format("repos/%s/statuses/%s", projectId, sha),
+              request,
+              Status.class,
+              "Create status");
       if (result.getContext() == null || result.getState() == null) {
         throw new RepoException(
             String.format(

@@ -254,12 +254,12 @@ public class GitHubPrOrigin implements Origin<GitRevision> {
 
   @Override
   public GitRevision resolveLastRev(String reference) throws RepoException, ValidationException {
-    String sha1Part = Splitter.on(" ").split(reference).iterator().next();
-    Matcher matcher = GitRevision.COMPLETE_GIT_HASH_PATTERN.matcher(sha1Part);
+    String shaPart = Splitter.on(" ").split(reference).iterator().next();
+    Matcher matcher = GitRevision.COMPLETE_GIT_HASH_PATTERN.matcher(shaPart);
     // Note that this might not work if the PR is for a different branch than the imported to
     // the destination. But in this case we cannot do that much apart from --force.
     if (matcher.matches()) {
-      return new GitRevision(getRepository(), getRepository().parseRef(sha1Part));
+      return new GitRevision(getRepository(), getRepository().parseRef(shaPart));
     }
     throw new CannotResolveRevisionException(String.format("'%s' is not a valid SHA.", reference));
   }
@@ -414,12 +414,12 @@ public class GitHubPrOrigin implements Origin<GitRevision> {
     String refForMigration = actuallyUseMerge ? LOCAL_PR_MERGE_REF : LOCAL_PR_HEAD_REF;
     GitRevision gitRevision = getRepository().resolveReference(refForMigration);
 
-    String headPrSha1 = getRepository().resolveReference(LOCAL_PR_HEAD_REF).getHash();
+    String headPrSha = getRepository().resolveReference(LOCAL_PR_HEAD_REF).getHash();
     String integrateLabel = new GitHubPrIntegrateLabel(getRepository(), generalOptions,
         project, prNumber,
         prData.getHead().getLabel(),
         // The integrate SHA has to be HEAD of the PR not the merge ref, even if use_merge = True
-        headPrSha1)
+        headPrSha)
         .toString();
 
     labels.putAll(
@@ -428,7 +428,7 @@ public class GitHubPrOrigin implements Origin<GitRevision> {
     labels.put(GITHUB_PR_NUMBER_LABEL, Integer.toString(prNumber));
     labels.put(GitModule.DEFAULT_INTEGRATE_LABEL, integrateLabel);
     labels.put(GITHUB_BASE_BRANCH, prData.getBase().getRef());
-    labels.put(GITHUB_PR_HEAD_SHA, headPrSha1);
+    labels.put(GITHUB_PR_HEAD_SHA, headPrSha);
     labels.put(GITHUB_PR_USE_MERGE, Boolean.toString(actuallyUseMerge));
 
     String mergeBase = getRepository().mergeBase(refForMigration, LOCAL_PR_BASE_BRANCH);

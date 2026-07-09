@@ -25,7 +25,7 @@ import com.google.copybara.exception.ValidationException;
 import com.google.copybara.profiler.Profiler.ProfilerTask;
 import java.util.Optional;
 
-/** A  class comparing git tree of a repo's head sha1 with any sha1 */
+/** A class comparing git tree of a repo's head SHA with any SHA */
 public class SameGitTree {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
@@ -51,30 +51,31 @@ public class SameGitTree {
   }
 
   /**
-   * Compare git tree of repo's head with the parameter sha1
+   * Compare git tree of repo's head with the parameter SHA
    *
-   * <p>It will save the current head at the repo, and fetch the sha1. Then compare the git three of
+   * <p>It will save the current head at the repo, and fetch the SHA. Then compare the git three of
    * them.
    *
    * <p>In the end, regardless of the checking status, the repo will be force set to previous head.
    */
-  public boolean hasSameTree(String sha1) throws RepoException, ValidationException {
+  public boolean hasSameTree(String sha) throws RepoException, ValidationException {
     String oldHead = saveOldHead();
-    try (ProfilerTask ignore2 = generalOptions.profiler().start("fetch_remote_sha1")) {
+    try (ProfilerTask ignore2 = generalOptions.profiler().start("fetch_remote_sha")) {
       repo.fetch(
           repoUrl,
           /* prune= */ false,
           /* force= */ true,
-          ImmutableList.of(sha1),
+          ImmutableList.of(sha),
           partialFetch,
           Optional.empty(),
           false);
-      return repo.hasSameTree(sha1);
+      return repo.hasSameTree(sha);
     } catch (RepoException | ValidationException e) {
       logger.atWarning().withCause(e).log(
-          "Cannot compare git tree of head %s with sha1 %s.", oldHead, sha1);
-      generalOptions.console().warnFmt(
-          "Cannot compare git tree of head %s with sha1 %s.", oldHead, sha1);
+          "Cannot compare git tree of head %s with SHA %s.", oldHead, sha);
+      generalOptions
+          .console()
+          .warnFmt("Cannot compare git tree of head %s with SHA %s.", oldHead, sha);
     } finally {
       repo.forceCheckout(oldHead);
     }

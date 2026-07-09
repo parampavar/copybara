@@ -633,11 +633,18 @@ public class GitOrigin implements Origin<GitRevision> {
       Change<GitRevision> rev = changes.get(0);
       // Keep the original revision since it might have context information like code review
       // info. The difference with changes method is that here we know exactly what we've
-      // requested (One SHA-1 revision) while in the other we get a result for a range. That
+      // requested (One SHA revision) while in the other we get a result for a range. That
       // means that extensions of GitOrigin need to implement changes if they want to provide
       // additional information.
-      return new Change<>(ref, rev.getAuthor(), rev.getMessage(), rev.getDateTime(),
-          rev.getLabels(), rev.getChangeFiles(), rev.isMerge(), rev.getParents())
+      return new Change<>(
+              ref,
+              rev.getAuthor(),
+              rev.getMessage(),
+              rev.getDateTime(),
+              rev.getLabels(),
+              rev.getChangeFiles(),
+              rev.isMerge(),
+              rev.getParents())
           .withLabels(ref.associatedLabels());
     }
 

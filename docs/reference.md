@@ -3662,7 +3662,7 @@ Implicit labels that can be used/exposed:
   - GITHUB_PR_TITLE: Title of the Pull Request.
   - GITHUB_PR_BODY: Body of the Pull Request.
   - GITHUB_PR_URL: GitHub url of the Pull Request.
-  - GITHUB_PR_HEAD_SHA: The SHA-1 of the head commit of the pull request.
+  - GITHUB_PR_HEAD_SHA: The SHA of the head commit of the pull request.
   - GITHUB_PR_USER: The login of the author the pull request.
   - GITHUB_PR_ASSIGNEE: A repeated label with the login of the assigned users.
   - GITHUB_PR_REVIEWER_APPROVER: A repeated label with the login of users that have participated in the review and that can approve the import. Only populated if `review_state` field is set. Every reviewers type matching `review_approvers` will be added to this list.
@@ -3831,7 +3831,7 @@ Parameter | Description
 <a id="git.origin" aria-hidden="true"></a>
 ### git.origin
 
-Defines a standard Git origin. For Git specific origins use: `github_origin` or `gerrit_origin`.<br><br>All the origins in this module accept several string formats as reference (When copybara is called in the form of `copybara config workflow reference`):<br><ul><li>**Branch name:** For example `master`</li><li>**An arbitrary reference:** `refs/changes/20/50820/1`</li><li>**A SHA-1:** Note that it has to be reachable from the default refspec</li><li>**A Git repository URL and reference:** `http://github.com/foo master`</li><li>**A GitHub pull request URL:** `https://github.com/some_project/pull/1784`</li></ul><br>So for example, Copybara can be invoked for a `git.origin` in the CLI as:<br>`copybara copy.bara.sky my_workflow https://github.com/some_project/pull/1784`<br>This will use the pull request as the origin URL and reference.
+Defines a standard Git origin. For Git specific origins use: `github_origin` or `gerrit_origin`.<br><br>All the origins in this module accept several string formats as reference (When copybara is called in the form of `copybara config workflow reference`):<br><ul><li>**Branch name:** For example `master`</li><li>**An arbitrary reference:** `refs/changes/20/50820/1`</li><li>**A SHA:** Note that it has to be reachable from the default refspec</li><li>**A Git repository URL and reference:** `http://github.com/foo master`</li><li>**A GitHub pull request URL:** `https://github.com/some_project/pull/1784`</li></ul><br>So for example, Copybara can be invoked for a `git.origin` in the CLI as:<br>`copybara copy.bara.sky my_workflow https://github.com/some_project/pull/1784`<br>This will use the pull request as the origin URL and reference.
 
 <code><a href="#origin">origin</a></code> <code>git.origin(<a href=#git.origin.url>url</a>, <a href=#git.origin.ref>ref</a>=None, <a href=#git.origin.submodules>submodules</a>='NO', <a href=#git.origin.excluded_submodules>excluded_submodules</a>=[], <a href=#git.origin.include_branch_commit_logs>include_branch_commit_logs</a>=False, <a href=#git.origin.first_parent>first_parent</a>=True, <a href=#git.origin.partial_fetch>partial_fetch</a>=False, <a href=#git.origin.patch>patch</a>=None, <a href=#git.origin.describe_version>describe_version</a>=None, <a href=#git.origin.version_selector>version_selector</a>=None, <a href=#git.origin.primary_branch_migration>primary_branch_migration</a>=False, <a href=#git.origin.credentials>credentials</a>=None, <a href=#git.origin.repo_id>repo_id</a>=None)</code>
 
@@ -4128,7 +4128,7 @@ Combined Information about a commit status as defined in https://developer.githu
 
 Name | Description
 ---- | -----------
-sha | <code><a href="#string">string</a></code><br><p>The SHA-1 of the commit</p>
+sha | <code><a href="#string">string</a></code><br><p>The SHA of the commit</p>
 state | <code><a href="#string">string</a></code><br><p>The overall state of all statuses for a commit: success, failure, pending or error</p>
 statuses | <code>list of github_api_status_obj</code><br><p>List of statuses for the commit</p>
 total_count | <code><a href="#int">int</a></code><br><p>Total number of statuses</p>
@@ -4689,7 +4689,7 @@ detail_url | <code><a href="#string">string</a></code><br><p>The URL of the inte
 name | <code><a href="#string">string</a></code><br><p>The name of the check</p>
 output | <code><a href="#output_obj">output_obj</a></code><br><p>The description of a GitHub App's run, including title, summary, text.</p>
 pulls | <code>list of PullRequest</code><br><p>Pull requests associated with this check_run ('number' only)</p>
-sha | <code><a href="#string">string</a></code><br><p>The SHA-1 the check run is based on</p>
+sha | <code><a href="#string">string</a></code><br><p>The SHA the check run is based on</p>
 status | <code><a href="#string">string</a></code><br><p>The current status of the check run. Can be one of queued, in_progress, or completed.</p>
 
 
@@ -4720,7 +4720,7 @@ Name | Description
 app | <code><a href="#github_app_obj">github_app_obj</a></code><br><p>The detail of a GitHub App, such as id, slug, and name</p>
 conclusion | <code><a href="#string">string</a></code><br><p>The final conclusion of the check. Can be one of success, failure, neutral, cancelled, timed_out, or action_required.</p>
 id | <code><a href="#int">int</a></code><br><p>Check suite identifier</p>
-sha | <code><a href="#string">string</a></code><br><p>The SHA-1 the check run is based on</p>
+sha | <code><a href="#string">string</a></code><br><p>The SHA the check run is based on</p>
 status | <code><a href="#string">string</a></code><br><p>The current status of the check run. Can be one of queued, in_progress, pending, or completed.</p>
 
 

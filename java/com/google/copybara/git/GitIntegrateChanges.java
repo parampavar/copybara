@@ -369,9 +369,9 @@ public class GitIntegrateChanges implements StarlarkValue {
       if (previousHead == null) {
         return Optional.of(head.commit().getHash());
       }
-      String sha1;
+      String sha;
       try {
-        sha1 = integrateLabel.getRevision().getHash();
+        sha = integrateLabel.getRevision().getHash();
       } catch (RepoException | ValidationException e) {
         // There is a weird git submodule issue where the first time we fetch a reference but
         // the local state (git-tree and workdir) doesn't have a reference to the submodule it
@@ -390,7 +390,7 @@ public class GitIntegrateChanges implements StarlarkValue {
           return Optional.of(head.commit().getHash());
         }
         try {
-          sha1 = integrateLabel.getRevision().getHash();
+          sha = integrateLabel.getRevision().getHash();
         } catch (RepoException retryException) {
           logger.atWarning().withCause(retryException).log(
               "Cannot fetch/find integrate commit (2nd attempt): %s.", integrateLabel);
@@ -406,7 +406,7 @@ public class GitIntegrateChanges implements StarlarkValue {
         }
       }
       try {
-        return Optional.of(repository.mergeBase(previousHead.getHash(), sha1));
+        return Optional.of(repository.mergeBase(previousHead.getHash(), sha));
       } catch (RepoException e) {
         logger.atWarning().withCause(e).log(
             "Cannot find common parent for previous head commit %s and integrate commit: %s.",

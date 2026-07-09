@@ -80,11 +80,7 @@ public class CheckSuite implements StarlarkValue {
     return conclusion == null ? null : conclusion.toString().toLowerCase();
   }
 
-  @StarlarkMethod(
-      name = "sha",
-      doc = "The SHA-1 the check run is based on",
-      structField = true
-  )
+  @StarlarkMethod(name = "sha", doc = "The SHA the check run is based on", structField = true)
   public String getSha() {
     return sha;
   }
