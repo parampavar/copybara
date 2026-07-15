@@ -18,10 +18,10 @@ package com.google.copybara.util.console;
 
 import com.google.common.base.Splitter;
 import com.google.common.flogger.FluentLogger;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import net.starlark.java.eval.EvalException;
@@ -73,7 +73,7 @@ public class Consoles {
 
   public static void printCauseChain(Level level, Console console, String[] args, Throwable e) {
     StringBuilder error = new StringBuilder(e.getMessage()).append("\n");
-    List<Throwable> suppressed = Arrays.asList(e.getSuppressed());
+    ArrayList<Throwable> suppressed = new ArrayList<>(Arrays.asList(e.getSuppressed()));
     Throwable cause = e.getCause();
     while (cause != null) {
       Collections.addAll(suppressed, cause.getSuppressed());

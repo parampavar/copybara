@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.google.copybara.util.console.Message.MessageType;
 import com.google.copybara.util.console.testing.TestingConsole;
 import java.io.IOException;
+import java.util.logging.Level;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -43,21 +44,24 @@ public final class ConsolesTest {
 
   @Test
   public void logLines_empty() {
-    Consoles.logLines(console, "prefix", /*text*/ "");
+    Consoles.logLines(console, "prefix", /* text= */ "");
     console.assertThat()
         .containsNoMoreMessages();
   }
 
   @Test
   public void verboseLogLines_empty() {
-    Consoles.verboseLogLines(console, "prefix", /*text*/ "");
+    Consoles.verboseLogLines(console, "prefix", /* text= */ "");
     console.assertThat()
         .containsNoMoreMessages();
   }
 
   @Test
   public void logLines_oneLine() {
-    Consoles.logLines(console, "fooprefix-", """
+    Consoles.logLines(
+        console,
+        "fooprefix-",
+        """
         hello
         goodbye
         """);
@@ -69,7 +73,10 @@ public final class ConsolesTest {
 
   @Test
   public void verboseLogLines_oneLine() {
-    Consoles.verboseLogLines(console, "fooprefix-", """
+    Consoles.verboseLogLines(
+        console,
+        "fooprefix-",
+        """
         hello
         goodbye
         """);
@@ -89,7 +96,10 @@ public final class ConsolesTest {
 
   @Test
   public void logLines_oneEmptyLineSurroundedByNonEmpty() {
-    Consoles.logLines(console, "fooprefix-", """
+    Consoles.logLines(
+        console,
+        "fooprefix-",
+        """
         x
 
         y
@@ -116,6 +126,77 @@ public final class ConsolesTest {
         assertThrows(RuntimeException.class, () -> console.ask("fail", "aaa", s -> true));
     assertThat(e).hasMessageThat().contains("should fail");
 
-    assertThat(console.ask("work", "aaa", s-> true)).isEqualTo("good");
+    assertThat(console.ask("work", "aaa", s -> true)).isEqualTo("good");
+  }
+
+  @Test
+  public void printCauseChain_simpleException() {
+    Consoles.printCauseChain(
+        Level.SEVERE, console, new String[] {"arg"}, new RuntimeException("Something failed"));
+    console
+        .assertThat()
+        .equalsNext(MessageType.ERROR, "Something failed\n")
+        .containsNoMoreMessages();
+  }
+
+  @Test
+  public void printCauseChain_exceptionWithCauses() {
+    Throwable cause = new IllegalStateException("Deep cause");
+    Throwable mid = new IllegalArgumentException("Intermediate cause", cause);
+    Throwable top = new RuntimeException("Top level error", mid);
+
+    Consoles.printCauseChain(Level.SEVERE, console, new String[] {"arg"}, top);
+    console
+        .assertThat()
+        .equalsNext(
+            MessageType.ERROR,
+            """
+            Top level error
+              CAUSED BY: Intermediate cause
+              CAUSED BY: Deep cause
+            """)
+        .containsNoMoreMessages();
+  }
+
+  @Test
+  public void printCauseChain_withSuppressedExceptions() {
+    Throwable top = new RuntimeException("Main failure");
+    top.addSuppressed(new IOException("Suppressed IO"));
+    top.addSuppressed(new IllegalStateException("Suppressed state"));
+
+    Consoles.printCauseChain(Level.WARNING, console, new String[] {}, top);
+    console
+        .assertThat()
+        .equalsNext(MessageType.ERROR, "Suppressed IO\n")
+        .equalsNext(MessageType.ERROR, "Suppressed state\n")
+        .equalsNext(MessageType.ERROR, "Main failure\n")
+        .containsNoMoreMessages();
+  }
+
+  @Test
+  public void printCauseChain_withSuppressedExceptionsOnCauses() {
+    Throwable cause = new IllegalStateException("Root cause");
+    cause.addSuppressed(new RuntimeException("Suppressed on cause"));
+    Throwable top = new RuntimeException("Top failure", cause);
+    top.addSuppressed(new RuntimeException("Suppressed on top"));
+
+    Consoles.printCauseChain(Level.WARNING, console, new String[] {"arg"}, top);
+    console
+        .assertThat()
+        .equalsNext(MessageType.ERROR, "Suppressed on top\n")
+        .equalsNext(MessageType.ERROR, "Suppressed on cause\n")
+        .equalsNext(
+            MessageType.ERROR,
+            """
+            Top failure
+              CAUSED BY: Root cause
+            """)
+        .containsNoMoreMessages();
+  }
+
+  @Test
+  public void formatLogError() {
+    assertThat(Consoles.formatLogError("Something broke", new String[] {"arg1", "arg2"}))
+        .isEqualTo("Something broke (command args: [arg1, arg2])");
   }
 }
