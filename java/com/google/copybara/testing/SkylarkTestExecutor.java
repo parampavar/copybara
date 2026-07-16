@@ -130,7 +130,8 @@ public class SkylarkTestExecutor {
       throw new RuntimeException(
           String.format("Should not happen: %s.\n %s", e.getMessage(), getLogErrors()), e);
     } catch (ValidationException ve) {
-      throw new ValidationException(ve.getMessage() + getLogErrors(), ve);
+      throw new ValidationException(
+          ve.getMessage() + getLogErrors() + " \n\nConfig:\n" + config, ve);
     }
   }
 
