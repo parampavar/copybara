@@ -3757,7 +3757,7 @@ Name | Type | Description
 
 Integrate changes from a url present in the migrated change label.
 
-<code>git_integrate</code> <code>git.integrate(<a href=#git.integrate.label>label</a>="COPYBARA_INTEGRATE_REVIEW", <a href=#git.integrate.strategy>strategy</a>="FAKE_MERGE_AND_INCLUDE_FILES", <a href=#git.integrate.ignore_errors>ignore_errors</a>=True, <a href=#git.integrate.allow_unrelated_history>allow_unrelated_history</a>=False)</code>
+<code>git_integrate</code> <code>git.integrate(<a href=#git.integrate.label>label</a>="COPYBARA_INTEGRATE_REVIEW", <a href=#git.integrate.strategy>strategy</a>="FAKE_MERGE_AND_INCLUDE_FILES", <a href=#git.integrate.ignore_errors>ignore_errors</a>=True, <a href=#git.integrate.allow_unrelated_history>allow_unrelated_history</a>=False, <a href=#git.integrate.merge_commit_message>merge_commit_message</a>="${MERGE_MSG}")</code>
 
 
 <h4 id="parameters.git.integrate">Parameters:</h4>
@@ -3768,9 +3768,10 @@ Parameter | Description
 <span id=git.integrate.strategy href=#git.integrate.strategy>strategy</span> | <code><a href="#string">string</a></code><br><p>How to integrate the change:<br><ul> <li><b>'FAKE_MERGE'</b>: Add the url revision/reference as parent of the migration change but ignore all the files from the url. The commit message will be a standard merge one but will include the corresponding RevId label</li> <li><b>'FAKE_MERGE_AND_INCLUDE_FILES'</b>: Same as 'FAKE_MERGE' but any change to files that doesn't match destination_files will be included as part of the merge commit. So it will be a semi fake merge: Fake for destination_files but merge for non destination files.</li> <li><b>'INCLUDE_FILES'</b>: Same as 'FAKE_MERGE_AND_INCLUDE_FILES' but it it doesn't create a merge but only include changes not matching destination_files</li></ul></p>
 <span id=git.integrate.ignore_errors href=#git.integrate.ignore_errors>ignore_errors</span> | <code><a href="#bool">bool</a></code><br><p>If we should ignore integrate errors and continue the migration without the integrate</p>
 <span id=git.integrate.allow_unrelated_history href=#git.integrate.allow_unrelated_history>allow_unrelated_history</span> | <code><a href="#bool">bool</a></code><br><p>If true allow integrates of unrelated histories.</p>
+<span id=git.integrate.merge_commit_message href=#git.integrate.merge_commit_message>merge_commit_message</span> | <code><a href="#string">string</a></code><br><p>The template for the merge commit message. Use ${MERGE_MSG} for default message and ${SUMMARY_FROM_TRANSFORM} for summary of the transform. All other labels from the TransformResult are available, but destination labels might not. It will use the first label value if multiple are defined. See metadata.replace_message for semantics</p>
 
 
-<h4 id="example.git.integrate">Example:</h4>
+<h4 id="example.git.integrate">Examples:</h4>
 
 
 ##### Integrate changes from a review url:
@@ -3786,6 +3787,24 @@ git.destination(
 ```
 
 It will look for `COPYBARA_INTEGRATE_REVIEW` label during the worklow migration. If the label is found, it will fetch the git url and add that change as an additional parent to the migration commit (merge). It will fake-merge any change from the url that matches destination_files but it will include changes not matching it.
+
+
+##### Integrate changes with a custom merge commit message:
+
+Assuming we want to customize the merge commit message:
+
+```python
+git.destination(
+        url = "https://example.com/some_git_repo",
+        integrates = [
+            git.integrate(
+                merge_commit_message = "Merged: ${SUMMARY_FROM_TRANSFORM} \n\nOriginal: ${MERGE_MSG} \n\nRef: ${CONTEXT_REFERENCE}"
+            )
+        ],
+)
+```
+
+This will use the summary of the transform result, the default merge message, and the context reference to construct the final merge commit message.
 
 
 <a id="git.latest_version" aria-hidden="true"></a>

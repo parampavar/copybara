@@ -58,7 +58,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.junit.Before;
 import org.junit.Test;
@@ -797,6 +799,71 @@ public class GitDestinationIntegrateTest {
         .isEqualTo(Optional.empty());
   }
 
+  @Test
+  public void testIntegrateWithCustomMergeMessage() throws Exception {
+    Path repoPath = Files.createTempDirectory("test");
+
+    // Create a common baseline between the two repos
+    GitDestination destination =
+        destination(
+            "url = '" + url + "'",
+            String.format("push = '%s'", primaryBranch),
+            String.format("fetch = '%s'", primaryBranch),
+            "integrates = [git.integrate(strategy = 'FAKE_MERGE',merge_commit_message = 'Custom:"
+                + " ${SUMMARY_FROM_TRANSFORM} | ${MERGE_MSG} | ${CONTEXT_REFERENCE}')]");
+    migrateOriginChange(destination, "Base change\n", "not important");
+
+    GitRepository repo =
+        GitRepository.newRepo(/*verbose*/ true, repoPath, getGitEnv()).init(repoFormat);
+    repo.simpleCommand("pull", "file://" + repoGitDir);
+
+    GitRevision feature1 = singleChange(repoPath, repo, "ignore_me", "Feature1 change");
+    repo.branch("feature1").run();
+
+    migrateOriginChange(destination, "Base change 2\n", "not important 2");
+    GitLogEntry previous = getLastMigratedChange(primaryBranch);
+
+    Function<String, Collection<String>> labelFinder =
+        name -> {
+          if (name.equals("CONTEXT_REFERENCE")) {
+            return ImmutableList.of("test_context_ref");
+          }
+          return ImmutableList.of();
+        };
+
+    migrateOriginChange(
+        destination,
+        String.format(
+            """
+            Test change summary
+
+            %1$s=file://%2$s feature1
+            """,
+            GitModule.DEFAULT_INTEGRATE_LABEL, repo.getWorkTree()),
+        "test.txt",
+        "some content",
+        "test",
+        labelFinder);
+
+    GitLogEntry feature1Merge = getLastMigratedChange(primaryBranch);
+
+    String expectedDefaultMergeMsg =
+        "Merge of " + feature1.getHash() + "\n\n" + DummyOrigin.LABEL_NAME + ": test\n";
+    String expectedSummary =
+        String.format(
+            """
+            Test change summary
+
+            %1$s=file://%2$s feature1
+            """,
+            GitModule.DEFAULT_INTEGRATE_LABEL, repo.getWorkTree());
+
+    String expectedBody =
+        "Custom: " + expectedSummary + " | " + expectedDefaultMergeMsg + " | test_context_ref\n";
+
+    assertThat(feature1Merge.body()).isEqualTo(expectedBody);
+  }
+
   private GitLogEntry createBaseDestinationChange(GitDestination destination)
       throws IOException, RepoException, ValidationException {
     migrateOriginChange(destination, "Base change\n", "not important");
@@ -916,6 +983,17 @@ public class GitDestinationIntegrateTest {
   private void migrateOriginChange(GitDestination destination, String summary,
       String file, String content,
       String originRef) throws IOException, RepoException, ValidationException {
+    migrateOriginChange(destination, summary, file, content, originRef, ImmutableList::of);
+  }
+
+  private void migrateOriginChange(
+      GitDestination destination,
+      String summary,
+      String file,
+      String content,
+      String originRef,
+      Function<String, Collection<String>> labelFinder)
+      throws IOException, RepoException, ValidationException {
     WriterContext writerContext =
         new WriterContext("piper_to_github", "TEST", false, new DummyRevision("test"),
             Glob.ALL_FILES.roots());
@@ -923,8 +1001,10 @@ public class GitDestinationIntegrateTest {
 
     Files.createDirectories(workdir.resolve(file).getParent());
     Files.write(workdir.resolve(file), content.getBytes(UTF_8));
-    TransformResult result = TransformResults.of(workdir, new DummyRevision(originRef))
-        .withSummary(summary);
+    TransformResult result =
+        TransformResults.of(workdir, new DummyRevision(originRef))
+            .withSummary(summary)
+            .withLabelFinder(labelFinder);
 
     writer.write(result, destinationFiles, console);
   }

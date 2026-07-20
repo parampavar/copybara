@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -89,4 +90,26 @@ public class LabelTemplate {
       return label;
     }
   }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof LabelTemplate that)) {
+      return false;
+    }
+    return Objects.equals(template, that.template);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(template);
+  }
+
+  @Override
+  public String toString() {
+    return template;
+  }
 }
+

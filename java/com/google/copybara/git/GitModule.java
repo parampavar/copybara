@@ -89,6 +89,7 @@ import com.google.copybara.git.github.util.GitHubHost;
 import com.google.copybara.git.github.util.GitHubUtil;
 import com.google.copybara.git.gitlab.GitLabOptions;
 import com.google.copybara.git.gitlab.api.entities.MergeRequest.DetailedMergeStatus;
+import com.google.copybara.templatetoken.LabelTemplate;
 import com.google.copybara.transform.Replace;
 import com.google.copybara.transform.patch.PatchTransformation;
 import com.google.copybara.util.RepositoryUtil;
@@ -468,9 +469,18 @@ public class GitModule implements LabelsAwareModule, StarlarkValue {
         @Param(
             name = "allow_unrelated_history",
             named = true,
-            doc =
-                "If true allow integrates of unrelated histories.",
+            doc = "If true allow integrates of unrelated histories.",
             defaultValue = "False"),
+        @Param(
+            name = "merge_commit_message",
+            named = true,
+            doc =
+                "The template for the merge commit message. Use ${MERGE_MSG} for default message"
+                    + " and ${SUMMARY_FROM_TRANSFORM} for summary of the transform. All other"
+                    + " labels from the TransformResult are available, but destination labels might"
+                    + " not. It will use the first label value if multiple are defined. See"
+                    + " metadata.replace_message for semantics",
+            defaultValue = "\"${MERGE_MSG}\"")
       })
   @Example(
       title = "Integrate changes from a review url",
@@ -488,14 +498,38 @@ public class GitModule implements LabelsAwareModule, StarlarkValue {
               + " is found, it will fetch the git url and add that change as an additional parent"
               + " to the migration commit (merge). It will fake-merge any change from the url that"
               + " matches destination_files but it will include changes not matching it.")
+  @Example(
+      title = "Integrate changes with a custom merge commit message",
+      before = "Assuming we want to customize the merge commit message:",
+      code =
+          "git.destination(\n"
+              + "        url = \"https://example.com/some_git_repo\",\n"
+              + "        integrates = [\n"
+              + "            git.integrate(\n"
+              + "                merge_commit_message = \"Merged: ${SUMMARY_FROM_TRANSFORM} \\n"
+              + "\\n"
+              + "Original: ${MERGE_MSG} \\n"
+              + "\\n"
+              + "Ref: ${CONTEXT_REFERENCE}\"\n"
+              + "            )\n"
+              + "        ],\n"
+              + ")",
+      after =
+          "This will use the summary of the transform result, the default merge message,"
+              + " and the context reference to construct the final merge commit message.")
   public GitIntegrateChanges integrate(
-      String label, String strategy, Boolean ignoreErrors, Boolean allowUnrelatedHistory)
+      String label,
+      String strategy,
+      Boolean ignoreErrors,
+      Boolean allowUnrelatedHistory,
+      String mergeCommitMessage)
       throws EvalException {
     return new GitIntegrateChanges(
         label,
         stringToEnum("strategy", strategy, Strategy.class),
         ignoreErrors,
-        allowUnrelatedHistory != null && allowUnrelatedHistory);
+        allowUnrelatedHistory != null && allowUnrelatedHistory,
+        new LabelTemplate(mergeCommitMessage));
   }
 
   @SuppressWarnings("unused")

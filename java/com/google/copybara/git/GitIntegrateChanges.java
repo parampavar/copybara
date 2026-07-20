@@ -35,14 +35,17 @@ import com.google.copybara.git.GitRepository.GitLogEntry;
 import com.google.copybara.git.GitRepository.StatusCode;
 import com.google.copybara.git.GitRepository.StatusFile;
 import com.google.copybara.profiler.Profiler.ProfilerTask;
+import com.google.copybara.templatetoken.LabelTemplate;
 import com.google.copybara.util.DiffUtil;
 import com.google.copybara.util.DirFactory;
 import com.google.copybara.util.console.Console;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.eval.StarlarkValue;
@@ -55,23 +58,41 @@ import net.starlark.java.eval.StarlarkValue;
 public class GitIntegrateChanges implements StarlarkValue {
 
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+  private static final LabelTemplate DEFAULT_MERGE_MSG_TEMPLATE = new LabelTemplate("${MERGE_MSG}");
 
   private final String label;
   private final Strategy strategy;
   private final boolean ignoreErrors;
   private final boolean allowUnrelatedHistory;
+  private final LabelTemplate mergeCommitMessage;
 
   GitIntegrateChanges(String label, Strategy strategy, boolean ignoreErrors) {
-    this(label, strategy, ignoreErrors, /* allowUnrelatedHistory= */ false);
+    this(
+        label,
+        strategy,
+        ignoreErrors,
+        /* allowUnrelatedHistory= */ false,
+        DEFAULT_MERGE_MSG_TEMPLATE);
   }
 
   GitIntegrateChanges(
       String label, Strategy strategy, boolean ignoreErrors, boolean allowUnrelatedHistory) {
+    this(label, strategy, ignoreErrors, allowUnrelatedHistory, DEFAULT_MERGE_MSG_TEMPLATE);
+  }
+
+  GitIntegrateChanges(
+      String label,
+      Strategy strategy,
+      boolean ignoreErrors,
+      boolean allowUnrelatedHistory,
+      LabelTemplate mergeCommitMessage) {
     this.label = Preconditions.checkNotNull(label);
     this.strategy = Preconditions.checkNotNull(strategy);
     this.ignoreErrors = ignoreErrors;
     this.allowUnrelatedHistory = allowUnrelatedHistory;
+    this.mergeCommitMessage = Preconditions.checkNotNull(mergeCommitMessage);
   }
+
 
   /**
    * Perform an integrate of changes for matching labels in the existing {@code repository} HEAD.
@@ -162,7 +183,9 @@ public class GitIntegrateChanges implements StarlarkValue {
             generalOptions.getDirFactory(),
             generalOptions.isTemporaryFeature(
                 "GIT_INTEGRATE_FAIL_IF_COMMON_BASELINE_NOT_FOUND", true),
-            allowUnrelatedHistory);
+            allowUnrelatedHistory,
+            mergeCommitMessage,
+            result);
         optionalIntegrateLabel = Optional.of(integrateLabel);
       } catch (ValidationException e) {
         throw new CannotIntegrateException("Error resolving " + label.getValue(), e);
@@ -189,7 +212,9 @@ public class GitIntegrateChanges implements StarlarkValue {
           Console console,
           DirFactory dirFactory,
           boolean failIfIntegrateCommitNotFound,
-          boolean allowUnrelatedHistory)
+          boolean allowUnrelatedHistory,
+          LabelTemplate mergeCommitMessage,
+          TransformResult result)
           throws ValidationException, RepoException {
         GitLogEntry head = getHeadCommit(repository);
 
@@ -203,7 +228,30 @@ public class GitIntegrateChanges implements StarlarkValue {
           return;
         }
 
-        String msg = integrateLabel.mergeMessage(messageInfo.labelsToAdd);
+        String defaultMergeMessage = integrateLabel.mergeMessage(messageInfo.labelsToAdd);
+
+        Function<String, String> customLabelFinder =
+            name -> {
+              if (name.equals("SUMMARY_FROM_TRANSFORM")) {
+                return result.getSummary();
+              }
+              if (name.equals("MERGE_MSG")) {
+                return defaultMergeMessage;
+              }
+              Collection<String> values = result.getLabelFinder().apply(name);
+              return (values == null || values.isEmpty()) ? null : Iterables.getFirst(values, null);
+            };
+
+        String msg;
+        try {
+          msg = mergeCommitMessage.resolve(customLabelFinder);
+        } catch (LabelTemplate.LabelNotFoundException e) {
+          throw new CannotIntegrateException(
+              String.format(
+                  "Cannot find '%s' label for template '%s'", e.getLabel(), mergeCommitMessage),
+              e);
+        }
+
         // If there is already a merge, don't overwrite the merge but create a new one.
         // Otherwise amend the last commit as a merge.
         GitRevision commit = head.parents().size() > 1
@@ -230,7 +278,9 @@ public class GitIntegrateChanges implements StarlarkValue {
           Console console,
           DirFactory dirFactory,
           boolean failIfIntegrateCommitNotFound,
-          boolean allowUnrelatedHistory)
+          boolean allowUnrelatedHistory,
+          LabelTemplate mergeCommitMessage,
+          TransformResult result)
           throws ValidationException, RepoException {
         // Fake merge first so that we have a commit and then amend that commit wit the external
         // files
@@ -243,7 +293,9 @@ public class GitIntegrateChanges implements StarlarkValue {
             console,
             dirFactory,
             failIfIntegrateCommitNotFound,
-            allowUnrelatedHistory);
+            allowUnrelatedHistory,
+            mergeCommitMessage,
+            result);
         INCLUDE_FILES.integrate(
             repository,
             gitRevision,
@@ -253,7 +305,9 @@ public class GitIntegrateChanges implements StarlarkValue {
             console,
             dirFactory,
             failIfIntegrateCommitNotFound,
-            allowUnrelatedHistory);
+            allowUnrelatedHistory,
+            mergeCommitMessage,
+            result);
       }
     },
     /**
@@ -270,7 +324,9 @@ public class GitIntegrateChanges implements StarlarkValue {
           Console console,
           DirFactory dirFactory,
           boolean failIfIntegrateCommitNotFound,
-          boolean allowUnrelatedHistory)
+          boolean allowUnrelatedHistory,
+          LabelTemplate mergeCommitMessage,
+          TransformResult result)
           throws ValidationException, RepoException {
         // Save HEAD commit before starting messing with the repo
         GitLogEntry head = getHeadCommit(repository);
@@ -442,7 +498,9 @@ public class GitIntegrateChanges implements StarlarkValue {
         Console console,
         DirFactory dirFactory,
         boolean failIfIntegrateCommitNotFound,
-        boolean allowUnrelatedHistory)
+        boolean allowUnrelatedHistory,
+        LabelTemplate mergeCommitMessage,
+        TransformResult result)
         throws ValidationException, RepoException {
       throw new CannotIntegrateException(this + " integrate mode is still not supported");
     }
@@ -460,7 +518,8 @@ public class GitIntegrateChanges implements StarlarkValue {
     return ignoreErrors == that.ignoreErrors
         && allowUnrelatedHistory == that.allowUnrelatedHistory
         && Objects.equals(label, that.label)
-        && strategy == that.strategy;
+        && strategy == that.strategy
+        && Objects.equals(mergeCommitMessage, that.mergeCommitMessage);
   }
 
   public Strategy getStrategy() {
@@ -475,9 +534,13 @@ public class GitIntegrateChanges implements StarlarkValue {
     return allowUnrelatedHistory;
   }
 
+  public LabelTemplate getMergeCommitMessage() {
+    return mergeCommitMessage;
+  }
+
   @Override
   public int hashCode() {
-    return Objects.hash(label, strategy, ignoreErrors, allowUnrelatedHistory);
+    return Objects.hash(label, strategy, ignoreErrors, allowUnrelatedHistory, mergeCommitMessage);
   }
 
   @Override
@@ -487,6 +550,7 @@ public class GitIntegrateChanges implements StarlarkValue {
         .add("strategy", strategy)
         .add("ignoreErrors", ignoreErrors)
         .add("allowUnrelatedHistory", allowUnrelatedHistory)
+        .add("mergeCommitMessage", mergeCommitMessage)
         .toString();
   }
 
