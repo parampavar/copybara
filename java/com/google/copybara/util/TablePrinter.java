@@ -20,6 +20,7 @@ import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.CheckReturnValue;
 import java.util.Arrays;
 import java.util.List;
@@ -42,7 +43,8 @@ public class TablePrinter {
   }
 
   /** Add a row, must have the same number of elements as the header */
-  public TablePrinter addRow(Object... row) {
+  @CanIgnoreReturnValue
+  public synchronized TablePrinter addRow(Object... row) {
     if (row.length != headers.size()) {
       throw new IllegalArgumentException(String.format(
           "Wrong number of values in row; expected %d. Got: %d", headers.size(), row.length));
@@ -61,7 +63,7 @@ public class TablePrinter {
    * Build the table.
    */
   @CheckReturnValue
-  public List<String> build() {
+  public synchronized List<String> build() {
     ImmutableList.Builder<String> lines = ImmutableList.builder();
     lines.add(printRow('+', '-', ImmutableList.of()));
     lines.add(printRow('|', ' ', headers));
@@ -77,7 +79,7 @@ public class TablePrinter {
    * Build the table.
    */
   @CheckReturnValue
-  public String print() {
+  public synchronized String print() {
     return Joiner.on('\n').join(build());
   }
 
