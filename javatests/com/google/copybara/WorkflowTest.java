@@ -2799,8 +2799,6 @@ public class WorkflowTest {
 
   @Test
   public void mergeImport_iterativeMode() throws Exception {
-    options.general.setTemporaryFeaturesForTest(
-        ImmutableMap.of("experimental_iterative_merge_import", "true"));
     skylark = new SkylarkTestExecutor(options);
     transformations = ImmutableList.of();
     mergeImport =
@@ -2835,13 +2833,12 @@ public class WorkflowTest {
     assertThat(destination.processed).hasSize(2);
     assertThat(destination.processed.get(0).getChangesSummary()).contains("change 1");
     assertThat(destination.processed.get(1).getChangesSummary()).contains("change 2");
-    console().assertThat().onceInLog(MessageType.WARNING, "Iterative Merge Import is experimental");
   }
 
   @Test
-  public void mergeImport_iterativeMode_experimentDisabled() throws Exception {
+  public void mergeImport_iterativeMode_withTemporaryFeatureFlag() throws Exception {
     options.general.setTemporaryFeaturesForTest(
-        ImmutableMap.of("experimental_iterative_merge_import", "false"));
+        ImmutableMap.of("experimental_iterative_merge_import", "true"));
     skylark = new SkylarkTestExecutor(options);
     transformations = ImmutableList.of();
     mergeImport =
@@ -2853,7 +2850,7 @@ public class WorkflowTest {
         """;
     consistencyFilePath = "\"foo.bara.consistency\"";
 
-    Path testDir = Files.createTempDirectory("merge_import_iterative_disabled");
+    Path testDir = Files.createTempDirectory("merge_import_iterative_flag");
     Path base1 = Files.createDirectories(testDir.resolve("base1"));
     writeFile(base1, "foo.txt", "a\nb\nc\n");
     origin.addChange(0, base1, "base change", true);
@@ -2873,15 +2870,19 @@ public class WorkflowTest {
     Workflow<?, ?> workflow = skylarkWorkflow("default", WorkflowMode.ITERATIVE);
     workflow.run(workdir, ImmutableList.of(origin.changes.get(2).asString()));
 
+    assertThat(destination.processed).hasSize(2);
+    assertThat(destination.processed.get(0).getChangesSummary()).contains("change 1");
+    assertThat(destination.processed.get(1).getChangesSummary()).contains("change 2");
     console()
         .assertThat()
-        .onceInLog(MessageType.WARNING, "Unable to determine a baseline; disabling merge import");
+        .onceInLog(
+            MessageType.WARNING,
+            "The 'experimental_iterative_merge_import' temporary feature flag is deprecated and"
+                + " will be removed soon.");
   }
 
   @Test
   public void mergeImport_iterativeMode_withSkippedChanges() throws Exception {
-    options.general.setTemporaryFeaturesForTest(
-        ImmutableMap.of("experimental_iterative_merge_import", "true"));
     skylark = new SkylarkTestExecutor(options);
     transformations = ImmutableList.of();
     mergeImport =
@@ -2923,7 +2924,6 @@ public class WorkflowTest {
     assertThat(destination.processed.get(0).getChangesSummary()).doesNotContain("change 2");
     assertThat(destination.processed.get(1).getChangesSummary()).contains("change 3");
     assertThat(destination.processed.get(1).getChangesSummary()).doesNotContain("change 2");
-    console().assertThat().onceInLog(MessageType.WARNING, "Iterative Merge Import is experimental");
   }
 
   @Test

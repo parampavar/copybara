@@ -173,20 +173,19 @@ public enum WorkflowMode {
 
       runHelper.maybeValidateRepoInLastRevState(/*metadata=*/null);
 
-      boolean useIterativeMergeImport =
-          runHelper
-              .getGeneralOptions()
-              .isTemporaryFeature("experimental_iterative_merge_import", false);
-      O originBaseline =
-          useIterativeMergeImport ? runHelper.getOriginBaselineForMergeImport(lastRev) : null;
-
-      if (useIterativeMergeImport && runHelper.isMergeImport()) {
+      if (runHelper
+          .getGeneralOptions()
+          .isTemporaryFeature("experimental_iterative_merge_import", false)) {
         runHelper
             .getConsole()
             .warn(
-                "Iterative Merge Import is experimental. Please monitor the generated"
-                    + " changelists.");
+                "The 'experimental_iterative_merge_import' temporary feature flag is deprecated and"
+                    + " will be removed soon.");
       }
+
+      // We are ignoring the flag value as part of the rollout of its removal.
+      O originBaseline =
+          runHelper.isMergeImport() ? runHelper.getOriginBaselineForMergeImport(lastRev) : null;
 
       Deque<Change<O>> migrated = new ArrayDeque<>();
       int migratedChanges = 0;
@@ -245,7 +244,7 @@ public enum WorkflowMode {
             throw new ChangeRejectedException(message);
           }
         }
-        if (useIterativeMergeImport) {
+        if (runHelper.isMergeImport()) {
           lastRev = change.getRevision();
           originBaseline = change.getRevision();
         }
