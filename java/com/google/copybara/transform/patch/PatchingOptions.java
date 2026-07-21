@@ -78,6 +78,12 @@ public class PatchingOptions implements Option {
   String quiltBin = "quilt";
 
   /**
+   * Controls whether Quilt Transformation calls `quilt refresh` to recreate fuzzily-matched
+   * patches.
+   */
+  public boolean quiltRefreshPatches = true;
+
+  /**
    * Applies the diff into a directory tree.
    *
    * <p>{@code diffContents} is the result of invoking {@link DiffUtil#diff}.

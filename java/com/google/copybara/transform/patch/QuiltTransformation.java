@@ -251,12 +251,15 @@ public final class QuiltTransformation implements Transformation {
   private void importPatches(
       Path quiltRunDir, ImmutableList<Path> patches, Map<String, String> env, boolean verbose)
       throws IOException, ValidationException {
+    boolean refresh = options.quiltRefreshPatches;
     for (Path patch : patches) {
       Path targetPatch = quiltRunDir.resolve(patchesDirName).resolve(patch.getFileName());
       Files.deleteIfExists(targetPatch);
       runQuiltCommand(quiltRunDir, env, verbose, "import", patch.toString());
       runQuiltCommand(quiltRunDir, env, verbose, "push");
-      runQuiltCommand(quiltRunDir, env, verbose, "refresh");
+      if (refresh) {
+        runQuiltCommand(quiltRunDir, env, verbose, "refresh");
+      }
     }
   }
 

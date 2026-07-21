@@ -188,6 +188,31 @@ public final class QuiltTransformationTest {
   }
 
   @Test
+  public void transformationNoUpdatePatchTest() throws Exception {
+    patchingOptions.quiltRefreshPatches = false;
+    Files.write(checkoutDir.resolve("file1.txt"), "new line\n\nline1\nfoo\nline3".getBytes(UTF_8));
+    Files.write(checkoutDir.resolve("file2.txt"), "bar\n".getBytes(UTF_8));
+    QuiltTransformation transform =
+        new QuiltTransformation(
+            Optional.of(seriesFile),
+            ImmutableList.of(patchFile),
+            patchingOptions,
+            /* reverse= */ false,
+            /* directory= */ "",
+            Location.BUILTIN,
+            "patches");
+
+    transform.transform(TransformWorks.of(checkoutDir, "testmsg", console));
+
+    assertThatPath(checkoutDir)
+        .containsFile("file1.txt", "new line\n\nline1\nbar\nline3")
+        .containsFile("file2.txt", "new bar\n")
+        .containsFile("patches/diff.patch", OLDDIFF)
+        .containsFile("patches/series", SERIES)
+        .containsNoMoreFiles();
+  }
+
+  @Test
   public void transformationWarnsAndReplacesDestinationPatches() throws Exception {
     Files.write(checkoutDir.resolve("file1.txt"), "new line\n\nline1\nfoo\nline3".getBytes(UTF_8));
     Files.write(checkoutDir.resolve("file2.txt"), "bar\n".getBytes(UTF_8));

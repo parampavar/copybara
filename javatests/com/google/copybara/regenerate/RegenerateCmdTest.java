@@ -1095,4 +1095,20 @@ public class RegenerateCmdTest {
     assertThat(consistencyFileContent).doesNotContain("BUILD");
     assertThat(exitCode).isEqualTo(ExitCode.SUCCESS);
   }
+
+  @Test
+  public void testRegenerate_disablesQuiltPatchRefresh() throws Exception {
+    setupFooOriginImport();
+    when(patchRegenerator.inferImportBaseline(any(), any()))
+        .thenReturn(Optional.of(origin.getLatestChange().asString()));
+    setupTarget("bar");
+    RegenerateCmd cmd = getCmd(getImportAutopatchesConfigString());
+    CommandEnv commandEnv =
+        prepAndGetCommandEnv(ImmutableList.of(testRoot.resolve("copy.bara.sky").toString()), cmd);
+
+    ExitCode exitCode = cmd.run(commandEnv);
+
+    assertThat(exitCode).isEqualTo(ExitCode.SUCCESS);
+    assertThat(options.patch.quiltRefreshPatches).isFalse();
+  }
 }

@@ -31,6 +31,7 @@ import com.google.copybara.exception.CommandLineException;
 import com.google.copybara.exception.RepoException;
 import com.google.copybara.exception.ValidationException;
 import com.google.copybara.revision.Revision;
+import com.google.copybara.transform.patch.PatchingOptions;
 import com.google.copybara.util.ExitCode;
 import com.google.copybara.util.console.Console;
 import java.io.IOException;
@@ -63,6 +64,8 @@ public class RegenerateCmd implements CopybaraCmd {
     GeneralOptions options = commandEnv.getOptions().get(GeneralOptions.class);
     WorkflowOptions workflowOptions = commandEnv.getOptions().get(WorkflowOptions.class);
     RegenerateOptions regenerateOptions = commandEnv.getOptions().get(RegenerateOptions.class);
+    PatchingOptions patchingOptions = commandEnv.getOptions().get(PatchingOptions.class);
+    patchingOptions.quiltRefreshPatches = false;
     Console console = options.console();
 
     ConfigWithDependencies config =
