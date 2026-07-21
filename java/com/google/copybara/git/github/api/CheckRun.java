@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Google Inc.
+ * Copyright (C) 2019 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import com.google.api.client.util.Value;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.StarlarkBuiltin;
@@ -62,6 +63,27 @@ public class CheckRun implements StarlarkValue {
   @Key private Output output;
 
   @Key("pull_requests") private List<PullRequest> pullRequests;
+
+  public CheckRun() {}
+
+  public CheckRun(
+      @Nullable String detailUrl,
+      Status status,
+      @Nullable Conclusion conclusion,
+      String sha,
+      String name,
+      @Nullable GitHubApp app,
+      @Nullable Output output,
+      @Nullable List<PullRequest> pullRequests) {
+    this.detailUrl = detailUrl;
+    this.status = status;
+    this.conclusion = conclusion;
+    this.sha = sha;
+    this.name = name;
+    this.app = app;
+    this.output = output;
+    this.pullRequests = pullRequests;
+  }
 
   @StarlarkMethod(
       name = "detail_url",
@@ -203,9 +225,38 @@ public class CheckRun implements StarlarkValue {
         .toString();
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof CheckRun other)) {
+      return false;
+    }
+    return Objects.equals(detailUrl, other.detailUrl)
+        && status == other.status
+        && conclusion == other.conclusion
+        && Objects.equals(sha, other.sha)
+        && Objects.equals(name, other.name)
+        && Objects.equals(app, other.app)
+        && Objects.equals(output, other.output)
+        && Objects.equals(pullRequests, other.pullRequests);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(detailUrl, status, conclusion, sha, name, app, output, pullRequests);
+  }
+
   /** PR submessage in check_run. */
   public static class PullRequest implements StarlarkValue {
     @Key int number;
+
+    public PullRequest() {}
+
+    public PullRequest(int number) {
+      this.number = number;
+    }
 
     @StarlarkMethod(
         name = "number",
@@ -218,6 +269,22 @@ public class CheckRun implements StarlarkValue {
     @Override
     public String toString() {
       return MoreObjects.toStringHelper(this).add("number", number).toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof PullRequest other)) {
+        return false;
+      }
+      return number == other.number;
+    }
+
+    @Override
+    public int hashCode() {
+      return Integer.hashCode(number);
     }
   }
 }

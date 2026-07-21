@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Google Inc.
+ * Copyright (C) 2023 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,16 +22,22 @@ import static com.google.copybara.testing.git.GitTestUtil.getResource;
 
 import com.google.common.base.Ticker;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.copybara.git.github.api.CheckRun;
+import com.google.copybara.git.github.api.CheckRun.Conclusion;
+import com.google.copybara.git.github.api.CheckRun.Status;
 import com.google.copybara.git.github.api.CommitHistoryResponse;
 import com.google.copybara.git.github.api.CommitHistoryResponse.AssociatedPullRequestNode;
 import com.google.copybara.git.github.api.CommitHistoryResponse.HistoryNode;
 import com.google.copybara.git.github.api.GitHubApiTransport;
+import com.google.copybara.git.github.api.GitHubApp;
 import com.google.copybara.git.github.api.GitHubGraphQLApi;
 import com.google.copybara.git.github.api.GitHubGraphQLApi.GraphQLRequest;
 import com.google.copybara.profiler.LogProfilerListener;
 import com.google.copybara.profiler.Profiler;
 import com.google.copybara.testing.git.GitTestUtil.JsonValidator;
+import java.util.Objects;
 import java.util.function.Predicate;
 import org.junit.Before;
 import org.junit.Test;
@@ -105,5 +111,73 @@ public abstract class AbstractGitHubGraphQLApiTest {
                           && reviewer.equals("copybara_reviewer");
                     }))
         .isTrue();
+  }
+
+  @Test
+  public void testGetCheckRuns() throws Exception {
+    JsonValidator<GraphQLRequest> initialValidator =
+        createValidator(
+            GraphQLRequest.class,
+            (r) -> {
+              if (r.getVariables().get("suiteCursor") != null) {
+                return false;
+              }
+              assertThat(r.getVariables().get("owner")).isEqualTo("google");
+              assertThat(r.getVariables().get("repo")).isEqualTo("copybara");
+              assertThat(r.getVariables().get("sha")).isEqualTo("123456");
+              assertThat(r.getQuery()).contains("checkSuites");
+              assertThat(r.getQuery()).contains("filter_0");
+              assertThat(r.getQuery()).contains("filter_1");
+              return true;
+            });
+    JsonValidator<GraphQLRequest> pageValidator =
+        createValidator(
+            GraphQLRequest.class,
+            (r) -> {
+              if (!Objects.equals(r.getVariables().get("suiteCursor"), "cursor_1")) {
+                return false;
+              }
+              assertThat(r.getVariables().get("owner")).isEqualTo("google");
+              assertThat(r.getVariables().get("repo")).isEqualTo("copybara");
+              assertThat(r.getVariables().get("sha")).isEqualTo("123456");
+              assertThat(r.getQuery()).contains("checkSuites");
+              return true;
+            });
+    trainMockPost(initialValidator, getResource("get_filtered_check_runs_page_one_testdata.json"));
+    trainMockPost(pageValidator, getResource("get_filtered_check_runs_page_two_testdata.json"));
+
+    ImmutableList<CheckRun> checkRuns =
+        api.getCheckRunsByNameFilter(
+            "google", "copybara", "123456", ImmutableSet.of("cla/google", "All Blocking Tests"));
+
+    assertThat(checkRuns)
+        .containsExactly(
+            new CheckRun(
+                "https://ci.example.com/cla",
+                Status.COMPLETED,
+                Conclusion.SUCCESS,
+                "123456",
+                "cla/google",
+                new GitHubApp(1, "github-actions", "GitHub Actions"),
+                null,
+                ImmutableList.of(new CheckRun.PullRequest(1234))),
+            new CheckRun(
+                "https://ci.example.com/blocking",
+                Status.COMPLETED,
+                Conclusion.SUCCESS,
+                "123456",
+                "All Blocking Tests",
+                new GitHubApp(1, "github-actions", "GitHub Actions"),
+                null,
+                ImmutableList.of(new CheckRun.PullRequest(1234))),
+            new CheckRun(
+                "https://ci.example.com/cla2",
+                Status.COMPLETED,
+                Conclusion.SUCCESS,
+                "123456",
+                "cla/google",
+                new GitHubApp(1, "github-actions", "GitHub Actions"),
+                null,
+                ImmutableList.of(new CheckRun.PullRequest(1234))));
   }
 }

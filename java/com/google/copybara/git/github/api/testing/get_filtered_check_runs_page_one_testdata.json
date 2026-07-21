@@ -1,0 +1,68 @@
+{
+  "data": {
+    "repository": {
+      "object": {
+        "associatedPullRequests": {
+          "nodes": [
+            {
+              "number": 1234
+            }
+          ]
+        },
+        "checkSuites": {
+          "nodes": [
+            {
+              "id": "CS_123",
+              "filter_0": {
+                "nodes": [
+                  {
+                    "id": "CR_123",
+                    "name": "cla/google",
+                    "status": "COMPLETED",
+                    "conclusion": "SUCCESS",
+                    "detailsUrl": "https://ci.example.com/cla",
+                    "checkSuite": {
+                      "commit": {
+                        "oid": "123456"
+                      },
+                      "app": {
+                        "databaseId": 1,
+                        "name": "GitHub Actions",
+                        "slug": "github-actions"
+                      }
+                    }
+                  }
+                ]
+              },
+              "filter_1": {
+                "nodes": [
+                  {
+                    "id": "CR_456",
+                    "name": "All Blocking Tests",
+                    "status": "COMPLETED",
+                    "conclusion": "SUCCESS",
+                    "detailsUrl": "https://ci.example.com/blocking",
+                    "checkSuite": {
+                      "commit": {
+                        "oid": "123456"
+                      },
+                      "app": {
+                        "databaseId": 1,
+                        "name": "GitHub Actions",
+                        "slug": "github-actions"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": true,
+            "endCursor": "cursor_1"
+          }
+        }
+      }
+    }
+  }
+}

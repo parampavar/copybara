@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Google Inc.
+ * Copyright (C) 2023 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,9 @@ import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @RunWith(JUnit4.class)
 public class GitHubGraphQLTest extends AbstractGitHubGraphQLApiTest {
 
@@ -49,10 +52,23 @@ public class GitHubGraphQLTest extends AbstractGitHubGraphQLApiTest {
   private Map<String, Predicate<String>> requestValidators;
   private Path credentialsFile;
 
+  private static class MockPostInfo {
+    final Predicate<String> validator;
+    final byte[] response;
+
+    MockPostInfo(Predicate<String> validator, byte[] response) {
+      this.validator = validator;
+      this.response = response;
+    }
+  }
+
+  private final List<MockPostInfo> trainedPosts = new ArrayList<>();
+
   @Before
   public void setUp() {
     requestToResponse.clear();
     requestValidators.clear();
+    trainedPosts.clear();
   }
 
   @Override
@@ -80,28 +96,34 @@ public class GitHubGraphQLTest extends AbstractGitHubGraphQLApiTest {
                 new MockLowLevelHttpRequest() {
                   @Override
                   public LowLevelHttpResponse execute() throws IOException {
-                    System.err.println(getContentAsString());
+                    String body = getContentAsString();
+                    System.err.println(body);
+
+                    for (MockPostInfo postInfo : trainedPosts) {
+                      if (postInfo.validator.test(body)) {
+                        return new MockLowLevelHttpResponse().setContent(postInfo.response);
+                      }
+                    }
 
                     Predicate<String> validator = requestValidators.get(method + " " + url);
                     if (validator != null) {
                       assertWithMessage("Request content did not match expected values.")
-                          .that(validator.test(getContentAsString()))
+                          .that(validator.test(body))
                           .isTrue();
                     }
-                    return super.execute();
+                    MockLowLevelHttpResponse response = requestToResponse.get(requestString);
+                    if (response == null) {
+                      response = new MockLowLevelHttpResponse();
+                      response.setContent(
+                          String.format(
+                              "{ 'message' : 'This is not the repo you are looking for! %s %s',"
+                                  + " 'documentation_url' : 'http://github.com/graphql'}",
+                              method, url));
+                      response.setStatusCode(404);
+                    }
+                    return response;
                   }
                 };
-            MockLowLevelHttpResponse response = requestToResponse.get(requestString);
-            if (response == null) {
-              response = new MockLowLevelHttpResponse();
-              response.setContent(
-                  String.format(
-                      "{ 'message' : 'This is not the repo you are looking for! %s %s',"
-                          + " 'documentation_url' : 'http://github.com/graphql'}",
-                      method, url));
-              response.setStatusCode(404);
-            }
-            request.setResponse(response);
             return request;
           }
         };
@@ -111,8 +133,6 @@ public class GitHubGraphQLTest extends AbstractGitHubGraphQLApiTest {
 
   @Override
   public void trainMockPost(Predicate<String> requestValidator, byte[] response) {
-    String path = "POST https://api.github.com/graphql";
-    requestToResponse.put(path, new MockLowLevelHttpResponse().setContent(response));
-    requestValidators.put(path, requestValidator);
+    trainedPosts.add(new MockPostInfo(requestValidator, response));
   }
 }

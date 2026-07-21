@@ -1,0 +1,50 @@
+{
+  "data": {
+    "repository": {
+      "object": {
+        "associatedPullRequests": {
+          "nodes": [
+            {
+              "number": 1234
+            }
+          ]
+        },
+        "checkSuites": {
+          "nodes": [
+            {
+              "id": "CS_456",
+              "filter_0": {
+                "nodes": [
+                  {
+                    "id": "CR_789",
+                    "name": "cla/google",
+                    "status": "COMPLETED",
+                    "conclusion": "SUCCESS",
+                    "detailsUrl": "https://ci.example.com/cla2",
+                    "checkSuite": {
+                      "commit": {
+                        "oid": "123456"
+                      },
+                      "app": {
+                        "databaseId": 1,
+                        "name": "GitHub Actions",
+                        "slug": "github-actions"
+                      }
+                    }
+                  }
+                ]
+              },
+              "filter_1": {
+                "nodes": []
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": null
+          }
+        }
+      }
+    }
+  }
+}

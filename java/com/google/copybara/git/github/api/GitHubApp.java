@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Google Inc.
+ * Copyright (C) 2019 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package com.google.copybara.git.github.api;
 
 import com.google.api.client.util.Key;
 import com.google.common.base.MoreObjects;
+import java.util.Objects;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
@@ -34,6 +35,14 @@ public class GitHubApp implements StarlarkValue {
   @Key private String slug;
 
   @Key private String name;
+
+  public GitHubApp() {}
+
+  public GitHubApp(int id, String slug, String name) {
+    this.id = id;
+    this.slug = slug;
+    this.name = name;
+  }
 
   @StarlarkMethod(name = "id", doc = "The GitHub App's Id", structField = true)
   public int getId() {
@@ -68,4 +77,21 @@ public class GitHubApp implements StarlarkValue {
         .toString();
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof GitHubApp other)) {
+      return false;
+    }
+    return id == other.id
+        && Objects.equals(slug, other.slug)
+        && Objects.equals(name, other.name);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(id, slug, name);
+  }
 }
